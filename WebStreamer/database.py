@@ -68,12 +68,14 @@ class Database:
                 cursor.execute("ALTER TABLE media_files ADD COLUMN IF NOT EXISTS dc_id INTEGER;")
                 cursor.execute("ALTER TABLE media_files ADD COLUMN IF NOT EXISTS channel_id BIGINT;")
                 self.conn.commit()
-            except:
-                pass
+            except Exception as alter_error:
+                self.conn.rollback()
+                logging.warning(f"Could not alter table: {alter_error}")
             
             cursor.close()
             logging.info("Table 'media_files' is ready")
         except Exception as e:
+            self.conn.rollback()
             logging.error(f"Failed to create table: {e}")
             raise
     
