@@ -19,7 +19,7 @@ class AuthSystem:
         try:
             cursor = self.conn.cursor()
             
-            # Users table
+            # Users table - create first as it's referenced by foreign keys
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     telegram_user_id BIGINT PRIMARY KEY,
@@ -30,6 +30,7 @@ class AuthSystem:
                     last_login TIMESTAMP
                 );
             """)
+            self.conn.commit()
             
             # OTP sessions table
             cursor.execute("""
@@ -43,17 +44,7 @@ class AuthSystem:
                     verified_at TIMESTAMP
                 );
             """)
-            
-            # Login sessions table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS login_sessions (
-                    session_token VARCHAR(64) PRIMARY KEY,
-                    telegram_user_id BIGINT NOT NULL REFERENCES users(telegram_user_id),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    expires_at TIMESTAMP NOT NULL,
-                    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
+            self.conn.commit()
             
             # Rate limits table
             cursor.execute("""
@@ -65,18 +56,53 @@ class AuthSystem:
                     day_reset TIMESTAMP
                 );
             """)
+            self.conn.commit()
+            
+            # Login sessions table - create after users table is committed
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS login_sessions (
+                    session_token VARCHAR(64) PRIMARY KEY,
+                    telegram_user_id BIGINT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NOT NULL,
+                    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            self.conn.commit()
+            
+            # Add foreign key constraint if it doesn't exist
+            try:
+                cursor.execute("""
+                    DO $$ 
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.table_constraints 
+                            WHERE constraint_name = 'login_sessions_telegram_user_id_fkey'
+                            AND table_name = 'login_sessions'
+                        ) THEN
+                            ALTER TABLE login_sessions 
+                            ADD CONSTRAINT login_sessions_telegram_user_id_fkey 
+                            FOREIGN KEY (telegram_user_id) REFERENCES users(telegram_user_id);
+                        END IF;
+                    END $$;
+                """)
+                self.conn.commit()
+            except Exception as fk_error:
+                logging.warning(f"Foreign key constraint may already exist: {fk_error}")
             
             # Add index for OTP lookup
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_otp_user_verified 
                 ON otp_sessions(telegram_user_id, verified);
             """)
+            self.conn.commit()
             
             # Add index for session lookup
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_session_expires 
                 ON login_sessions(session_token, expires_at);
             """)
+            self.conn.commit()
             
             cursor.close()
             logging.info("Authentication tables created successfully")
