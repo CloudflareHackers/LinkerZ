@@ -245,6 +245,7 @@ async def logout(request: web.Request):
                 cursor.execute("""
                     DELETE FROM login_sessions WHERE session_token = %s
                 """, (session_token,))
+                db.conn.commit()
                 cursor.close()
         
         response = web.json_response({
