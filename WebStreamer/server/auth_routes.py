@@ -116,6 +116,14 @@ async def verify_otp(request: web.Request):
                 'message': 'Invalid or expired OTP'
             }, status=401)
         
+        # Get user info from request (if provided) or create basic user
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+        username = data.get('username')
+        
+        # Create or update user record (required for foreign key constraint)
+        db.auth.create_user(telegram_user_id, first_name, last_name, username)
+        
         # Create session
         session_token = db.auth.create_session(telegram_user_id)
         
