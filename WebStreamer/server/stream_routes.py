@@ -90,6 +90,109 @@ async def info_route_handler(request: web.Request):
             text='<html> <head> <title>LinkerX CDN</title> <style> body{ margin:0; padding:0; width:100%; height:100%; color:#b0bec5; display:table; font-weight:100; font-family:Lato } .container{ text-align:center; display:table-cell; vertical-align:middle } .content{ text-align:center; display:inline-block } .message{ font-size:80px; margin-bottom:40px } .submessage{ font-size:40px; margin-bottom:40px } .copyright{ font-size:20px; } a{ text-decoration:none; color:#3498db } </style> </head> <body> <div class="container"> <div class="content"> <div class="message">LinkerX CDN</div> <div class="submessage">'+error_message+'</div> <div class="copyright">Hash Hackers and LiquidX Projects</div> </div> </div> </body> </html>', content_type="text/html"
         )
 
+
+# Public API to generate download link from channel/message
+@routes.get("/link/{path:.*}", allow_head=True)
+async def link_route_handler(request: web.Request):
+    """Generate download link for a file from channel_id/message_id - Public API, no auth required"""
+    try:
+        # eg. path is /link/channelid/messageid
+        parts = request.match_info['path'].split("/")
+        if len(parts) != 2:
+            return web.json_response({
+                'success': False,
+                'error': 'Invalid path. Use format: /link/{channel_id}/{message_id}'
+            }, status=400)
+
+        channel_id, message_id = parts
+        
+        # Get file properties from Telegram
+        index = min(work_loads, key=work_loads.get)
+        faster_client = multi_clients[index]
+        
+        if Var.MULTI_CLIENT:
+            logging.info(f"Client {index} is now serving {request.remote}")
+
+        if faster_client in class_cache:
+            tg_connect = class_cache[faster_client]
+            logging.debug(f"Using cached ByteStreamer object for client {index}")
+        else:
+            logging.debug(f"Creating new ByteStreamer object for client {index}")
+            tg_connect = utils.ByteStreamer(faster_client)
+            class_cache[faster_client] = tg_connect
+        
+        logging.debug(f"Getting file properties for message {message_id} in channel {channel_id}")
+        file_id = await tg_connect.get_file_properties(int(message_id), int(channel_id))
+        
+        # Extract file information
+        unique_file_id = file_id.file_unique_id
+        dc_id = file_id.dc_id
+        file_name = file_id.file_name
+        file_size = file_id.file_size
+        mime_type = file_id.mime_type
+        telegram_file_id = file_id.file_id
+        
+        # Store in database
+        db = get_database()
+        if db:
+            try:
+                db.store_file(
+                    unique_file_id=unique_file_id,
+                    bot_index=index,
+                    file_id=telegram_file_id,
+                    file_name=file_name,
+                    file_size=file_size,
+                    mime_type=mime_type,
+                    dc_id=dc_id,
+                    channel_id=int(channel_id)
+                )
+                logging.info(f"Stored file {unique_file_id} from channel {channel_id}")
+            except Exception as store_error:
+                logging.warning(f"Failed to store file in database: {store_error}")
+        
+        # Generate time-limited download link (3 hours)
+        import time
+        from WebStreamer.auth import generate_download_signature
+        from WebStreamer.vars import Var
+        
+        expires_at = int(time.time()) + (3 * 60 * 60)  # 3 hours from now
+        signature = generate_download_signature(unique_file_id, expires_at, Var.DOWNLOAD_SECRET_KEY)
+        
+        # Build download URL
+        fqdn = Var.FQDN
+        download_url = f"https://{fqdn}/download/{unique_file_id}/{expires_at}/{signature}"
+        
+        return web.json_response({
+            'success': True,
+            'download_url': download_url,
+            'file_info': {
+                'unique_file_id': unique_file_id,
+                'file_name': file_name,
+                'file_size': file_size,
+                'file_size_formatted': str(await formatFileSize(file_size)),
+                'mime_type': mime_type,
+                'dc_id': dc_id
+            },
+            'expires_at': expires_at,
+            'expires_in_seconds': 3 * 60 * 60
+        })
+        
+    except FileNotFoundError as e:
+        return web.json_response({
+            'success': False,
+            'error': 'File not found',
+            'message': str(e)
+        }, status=404)
+    except Exception as e:
+        error_message = str(e)
+        logging.error(f"Error generating link: {error_message}", exc_info=True)
+        return web.json_response({
+            'success': False,
+            'error': 'Internal server error',
+            'message': error_message
+        }, status=500)
+
+
 async def get_authenticated_user(request: web.Request):
     """Helper to get authenticated user from session"""
     session_token = request.cookies.get('session_token')
