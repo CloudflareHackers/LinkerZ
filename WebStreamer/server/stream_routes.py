@@ -151,9 +151,7 @@ async def link_route_handler(request: web.Request):
                 logging.warning(f"Failed to store file in database: {store_error}")
         
         # Generate time-limited download link (3 hours)
-        import time
         from WebStreamer.auth import generate_download_signature
-        from WebStreamer.vars import Var
         
         expires_at = int(time.time()) + (3 * 60 * 60)  # 3 hours from now
         signature = generate_download_signature(unique_file_id, expires_at, Var.DOWNLOAD_SECRET_KEY)
