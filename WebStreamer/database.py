@@ -26,7 +26,8 @@ class Database:
         """Establish database connection"""
         try:
             self.conn = psycopg2.connect(self.db_url)
-            self.conn.autocommit = True
+            # Don't use autocommit for table creation, manual commits give better control
+            self.conn.autocommit = False
             logging.info("Successfully connected to PostgreSQL database")
         except Exception as e:
             logging.error(f"Failed to connect to database: {e}")
