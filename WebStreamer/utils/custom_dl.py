@@ -101,11 +101,16 @@ class ByteStreamer:
                     await media_session.stop()
                     raise AuthBytesInvalid
             else:
+                # Get auth_key and test_mode
+                auth_key = await client.storage.auth_key()
+                test_mode = await client.storage.test_mode()
+                
+                # Create Session with proper arguments
                 media_session = Session(
-                    client,
-                    file_id.dc_id,
-                    await client.storage.auth_key(),
-                    await client.storage.test_mode(),
+                    client=client,
+                    dc_id=file_id.dc_id,
+                    auth_key=auth_key,
+                    test_mode=test_mode,
                     is_media=True,
                 )
                 await media_session.start()
