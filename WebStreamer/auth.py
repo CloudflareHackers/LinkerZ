@@ -329,6 +329,7 @@ class AuthSystem:
                 WHERE expires_at < CURRENT_TIMESTAMP
             """)
             deleted = cursor.rowcount
+            self.conn.commit()
             cursor.close()
             
             if deleted > 0:
