@@ -13,6 +13,55 @@ from WebStreamer.server.exceptions import FIleNotFound
 from pyrogram.file_id import FileId, FileType, ThumbnailSource
 
 
+def create_session_safe(client, dc_id, auth_key, test_mode, is_media=True):
+    """
+    Safely create a Session object with compatibility for different Pyrogram versions.
+    Tries multiple signature patterns to find the one that works.
+    """
+    # Get the Session.__init__ signature to understand what parameters it accepts
+    sig = inspect.signature(Session.__init__)
+    param_names = [p for p in sig.parameters.keys() if p != 'self']
+    
+    logging.debug(f"Session.__init__ parameters: {param_names}")
+    
+    # Try different patterns based on parameter names
+    try:
+        # Pattern 1: Positional arguments (old style)
+        if len(param_names) >= 4:
+            logging.debug("Trying pattern 1: positional arguments")
+            return Session(client, dc_id, auth_key, test_mode, is_media=is_media)
+    except TypeError as e:
+        logging.debug(f"Pattern 1 failed: {e}")
+        pass
+    
+    try:
+        # Pattern 2: Keyword arguments
+        logging.debug("Trying pattern 2: keyword arguments")
+        return Session(
+            client=client,
+            dc_id=dc_id,
+            auth_key=auth_key,
+            test_mode=test_mode,
+            is_media=is_media
+        )
+    except TypeError as e:
+        logging.debug(f"Pattern 2 failed: {e}")
+        pass
+    
+    try:
+        # Pattern 3: Without is_media parameter
+        logging.debug("Trying pattern 3: without is_media")
+        return Session(client, dc_id, auth_key, test_mode)
+    except TypeError as e:
+        logging.debug(f"Pattern 3 failed: {e}")
+        pass
+    
+    # If all patterns fail, log the signature and raise an error
+    logging.error(f"Failed to create Session. Signature: {sig}")
+    logging.error(f"Parameters attempted: client={type(client).__name__}, dc_id={dc_id}, auth_key=<bytes>, test_mode={test_mode}, is_media={is_media}")
+    raise RuntimeError(f"Could not create Session with any known signature. Session.__init__ parameters: {param_names}")
+
+
 class ByteStreamer:
     def __init__(self, client: Client):
         """A custom class that holds the cache of a specific client and class functions.
