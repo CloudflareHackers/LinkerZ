@@ -143,26 +143,30 @@ def register_multi_client_handlers():
     Register handlers on all multi_clients.
     This should be called after multi_clients are initialized.
     """
+    from pyrogram.handlers import MessageHandler
+    
     for bot_index, bot_client in multi_clients.items():
         if bot_index == 0:
             # Skip base bot, already has handler registered
             continue
         
-        # Create handler function with captured bot_index
-        async def create_handler(bot_idx):
+        # Create handler function with proper closure
+        def make_handler(bot_idx):
             async def handler(client, message: Message):
                 """Handle media files on multi-client - stores silently without reply"""
                 await store_channel_media(client, message, bot_index=bot_idx, should_reply=False)
             return handler
         
+        # Create the handler with captured bot_index
+        handler_func = make_handler(bot_index)
+        
         # Register handler on this client
-        handler_func = create_handler(bot_index)
         bot_client.add_handler(
-            filters.create(
-                lambda _, __, m: (m.chat and (m.chat.type == "channel" or m.chat.type == "supergroup" or m.chat.type == "group")) 
-                and (m.video or m.audio or m.document)
-            ).__call__,
+            MessageHandler(
+                handler_func,
+                filters=(filters.channel | filters.group) & MEDIA_FILTER
+            ),
             group=1
         )
         
-        logging.info(f"Registered media handler on bot {bot_index + 1}")
+        logging.info(f"Registered media handler on bot {bot_index + 1} (b_{bot_index + 1})")
