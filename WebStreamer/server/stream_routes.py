@@ -160,15 +160,35 @@ async def files_list_handler(request: web.Request):
         if not user:
             # Show login page
             return web.Response(text=get_login_page_html(), content_type="text/html")
-        # Get search query parameter
+        
+        # Get search query and page parameters
         search_query = request.query.get('search', '').strip()
+        try:
+            page = int(request.query.get('page', '1'))
+            if page < 1:
+                page = 1
+        except (ValueError, TypeError):
+            page = 1
         
         # Get database instance
         db = get_database()
         
-        # Get files from database
-        files = db.get_all_files(search_query=search_query if search_query else None, limit=1000)
+        # Get rate limit info
+        rate_limits = {}
+        if db.rate_limiter:
+            rate_limits = db.rate_limiter.get_limits(user['telegram_user_id'])
+        
+        # Pagination settings
+        items_per_page = 20
+        offset = (page - 1) * items_per_page
+        
+        # Get files from database with pagination
+        files = db.get_all_files(search_query=search_query if search_query else None, limit=items_per_page, offset=offset)
         total_count = db.get_file_count(search_query=search_query if search_query else None)
+        
+        # Calculate total pages
+        import math
+        total_pages = math.ceil(total_count / items_per_page) if total_count > 0 else 1
         
         # Build HTML table rows
         rows_html = ""
