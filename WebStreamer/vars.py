@@ -23,6 +23,7 @@ class Var(object):
     PORT = int(environ.get("PORT", 80))
     BIND_ADDRESS = str(environ.get("WEB_SERVER_BIND_ADDRESS", "0.0.0.0"))
     PING_INTERVAL = int(environ.get("PING_INTERVAL", "1200"))  # 20 minutes
+    DATABASE_URL = str(environ.get("DATABASE_URL", ""))  # PostgreSQL database URL
     HAS_SSL = environ.get("HAS_SSL", False)
     HAS_SSL = True if str(HAS_SSL).lower() == "true" else False
     NO_PORT = environ.get("NO_PORT", False)
