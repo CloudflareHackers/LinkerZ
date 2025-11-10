@@ -254,6 +254,7 @@ class AuthSystem:
                 cursor.execute("""
                     DELETE FROM login_sessions WHERE session_token = %s
                 """, (session_token,))
+                self.conn.commit()
                 cursor.close()
                 return None
             
@@ -263,6 +264,7 @@ class AuthSystem:
                 SET last_activity = CURRENT_TIMESTAMP
                 WHERE session_token = %s
             """, (session_token,))
+            self.conn.commit()
             
             cursor.close()
             return telegram_user_id
