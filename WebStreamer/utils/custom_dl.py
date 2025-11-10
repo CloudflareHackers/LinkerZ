@@ -124,24 +124,10 @@ class ByteStreamer:
                 ).create()
                 test_mode = await client.storage.test_mode()
                 
-                try:
-                    # Try the old signature (positional args)
-                    media_session = Session(
-                        client,
-                        file_id.dc_id,
-                        auth_key,
-                        test_mode,
-                        is_media=True,
-                    )
-                except TypeError:
-                    # If that fails, try with keyword arguments
-                    media_session = Session(
-                        client=client,
-                        dc_id=file_id.dc_id,
-                        auth_key=auth_key,
-                        test_mode=test_mode,
-                        is_media=True,
-                    )
+                # Use safe session creation
+                media_session = create_session_safe(
+                    client, file_id.dc_id, auth_key, test_mode, is_media=True
+                )
                 await media_session.start()
 
                 for _ in range(6):
