@@ -384,6 +384,20 @@ async def files_list_handler(request: web.Request):
                     background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
                     transition: width 0.3s;
                 }}
+                .logout-btn {{
+                    padding: 10px 20px;
+                    background: #e74c3c;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: background 0.3s;
+                }}
+                .logout-btn:hover {{
+                    background: #c0392b;
+                }}
                 .search-box {{
                     background: white;
                     padding: 25px;
