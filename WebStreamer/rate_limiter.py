@@ -89,6 +89,7 @@ class RateLimiter:
             return (True, f"Link generated. Remaining: {remaining_hour}/hour, {remaining_day}/day")
             
         except Exception as e:
+            self.conn.rollback()
             logging.error(f"Rate limit check failed: {e}")
             # Fail open - allow the request if rate limiting fails
             return (True, "Link generated (rate limit check skipped)")
