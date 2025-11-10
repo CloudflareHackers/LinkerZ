@@ -127,7 +127,7 @@ async def handle_private_media(client, message: Message):
                                 url=f"https://t.me/{bot_username}?startchannel=true")]
         ])
         
-        await message.reply_text(reply_text, reply_markup=keyboard)
+        await message.reply_text(reply_text, reply_markup=keyboard, quote=True)
         
     except Exception as e:
         logging.error(f"Error handling private media: {e}", exc_info=True)
