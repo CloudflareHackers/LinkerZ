@@ -195,6 +195,7 @@ class AuthSystem:
                     username = EXCLUDED.username,
                     last_login = CURRENT_TIMESTAMP
             """, (telegram_user_id, first_name, last_name, username))
+            self.conn.commit()
             
             cursor.close()
             logging.info(f"User record created/updated for {telegram_user_id}")
