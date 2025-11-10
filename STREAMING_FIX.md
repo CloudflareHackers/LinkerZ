@@ -1,12 +1,14 @@
-# Streaming Error Fix
+# Streaming Error Fix (v2 - Advanced)
 
 ## 🐛 Issue Identified
 
-**Error:** `TypeError: __init__() missing 2 required positional arguments: 'auth_key' and 'test_mode'`
+**Errors Encountered:**
+1. `TypeError: __init__() missing 2 required positional arguments: 'auth_key' and 'test_mode'`
+2. `TypeError: __init__() missing 2 required positional arguments: 'server_address' and 'port'`
 
 **Location:** `/app/WebStreamer/utils/custom_dl.py` in `generate_media_session()` method
 
-**Cause:** Version incompatibility between the code and the Pyrogram/kurigram library on production server. The `Session` class signature changed between versions.
+**Root Cause:** The `Session` class in Pyrogram/kurigram has wildly different signatures across versions and forks. The production environment uses a version with a completely different API than the development code expected.
 
 ## ✅ Fix Applied
 
