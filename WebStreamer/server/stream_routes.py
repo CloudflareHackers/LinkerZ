@@ -368,7 +368,6 @@ async def files_list_handler(request: web.Request):
                 
                 rows_html += f"""
                 <tr>
-                    <td style="padding: 12px; border-bottom: 1px solid #ecf0f1; word-break: break-all; font-size: 12px; font-family: monospace;">{unique_id}</td>
                     <td style="padding: 12px; border-bottom: 1px solid #ecf0f1;">{file_name}</td>
                     <td style="padding: 12px; border-bottom: 1px solid #ecf0f1; text-align: right;">{file_size}</td>
                     <td style="padding: 12px; border-bottom: 1px solid #ecf0f1;">{mime_type}</td>
