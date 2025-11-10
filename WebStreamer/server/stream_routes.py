@@ -727,7 +727,6 @@ async def files_list_handler(request: web.Request):
                     <table>
                         <thead>
                             <tr>
-                                <th>Unique ID</th>
                                 <th>File Name</th>
                                 <th style="text-align: right;">Size</th>
                                 <th>MIME Type</th>
