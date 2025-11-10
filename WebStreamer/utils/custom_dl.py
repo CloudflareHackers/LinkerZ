@@ -13,6 +13,112 @@ from WebStreamer.server.exceptions import FIleNotFound
 from pyrogram.file_id import FileId, FileType, ThumbnailSource
 
 
+def get_dc_config(dc_id, test_mode):
+    """
+    Get the server address and port for a given DC ID.
+    Returns (server_address, port) tuple.
+    """
+    if test_mode:
+        dc_configs = {
+            1: ("149.154.175.10", 443),
+            2: ("149.154.167.40", 443),
+            3: ("149.154.175.117", 443),
+        }
+    else:
+        # Production DCs
+        dc_configs = {
+            1: ("149.154.175.53", 443),
+            2: ("149.154.167.51", 443),
+            3: ("149.154.175.100", 443),
+            4: ("149.154.167.91", 443),
+            5: ("91.108.56.128", 443),
+        }
+    
+    return dc_configs.get(dc_id, ("149.154.167.51", 443))
+
+
+async def create_auth_safe(client, dc_id, test_mode):
+    """
+    Safely create an Auth object and get auth_key with compatibility for different Pyrogram versions.
+    Tries multiple signature patterns to find the one that works.
+    """
+    # Get the Auth.__init__ signature to understand what parameters it accepts
+    sig = inspect.signature(Auth.__init__)
+    param_names = [p for p in sig.parameters.keys() if p != 'self']
+    
+    logging.debug(f"Auth.__init__ parameters: {param_names}")
+    
+    # Check if we need server_address and port (newer Pyrogram versions)
+    if 'server_address' in param_names and 'port' in param_names:
+        try:
+            # Pattern 4: With server_address and port (newest version)
+            logging.debug("Trying Auth pattern 4: with server_address and port")
+            
+            # Try to get DC configuration from Pyrogram's internal DC map
+            try:
+                from pyrogram.session.internals import DataCenter
+                dc = DataCenter(dc_id, test_mode)
+                server_address = dc.address
+                port = dc.port
+                logging.debug(f"Using DataCenter class: {server_address}:{port}")
+            except Exception:
+                # Fallback to hardcoded DC addresses
+                server_address, port = get_dc_config(dc_id, test_mode)
+                logging.info(f"Using hardcoded DC config: {server_address}:{port} for DC {dc_id}")
+            
+            auth = Auth(
+                client,
+                dc_id,
+                server_address,
+                port,
+                test_mode
+            )
+            return await auth.create()
+        except Exception as e:
+            logging.debug(f"Auth pattern 4 failed: {e}")
+    
+    # Try Pattern 1: Old style positional arguments (client, dc_id, test_mode)
+    try:
+        logging.debug("Trying Auth pattern 1: positional arguments")
+        auth = Auth(client, dc_id, test_mode)
+        return await auth.create()
+    except TypeError as e:
+        logging.debug(f"Auth pattern 1 failed: {e}")
+    
+    # Try Pattern 2: Keyword arguments
+    try:
+        logging.debug("Trying Auth pattern 2: keyword arguments")
+        auth = Auth(
+            client=client,
+            dc_id=dc_id,
+            test_mode=test_mode
+        )
+        return await auth.create()
+    except TypeError as e:
+        logging.debug(f"Auth pattern 2 failed: {e}")
+    
+    # Try Pattern 3: With server_address and port using keyword args
+    if 'server_address' in param_names and 'port' in param_names:
+        try:
+            logging.debug("Trying Auth pattern 3: keyword arguments with server_address and port")
+            server_address, port = get_dc_config(dc_id, test_mode)
+            auth = Auth(
+                client=client,
+                dc_id=dc_id,
+                server_address=server_address,
+                port=port,
+                test_mode=test_mode
+            )
+            return await auth.create()
+        except TypeError as e:
+            logging.debug(f"Auth pattern 3 failed: {e}")
+    
+    # If all patterns fail, log the signature and raise an error
+    logging.error(f"Failed to create Auth. Signature: {sig}")
+    logging.error(f"Parameters attempted: client={type(client).__name__}, dc_id={dc_id}, test_mode={test_mode}")
+    raise RuntimeError(f"Could not create Auth with any known signature. Auth.__init__ parameters: {param_names}")
+
+
 def create_session_safe(client, dc_id, auth_key, test_mode, is_media=True):
     """
     Safely create a Session object with compatibility for different Pyrogram versions.
