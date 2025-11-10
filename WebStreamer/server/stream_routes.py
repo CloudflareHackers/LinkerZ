@@ -78,10 +78,76 @@ async def info_route_handler(request: web.Request):
             text='<html> <head> <title>LinkerX CDN</title> <style> body{ margin:0; padding:0; width:100%; height:100%; color:#b0bec5; display:table; font-weight:100; font-family:Lato } .container{ text-align:center; display:table-cell; vertical-align:middle } .content{ text-align:center; display:inline-block } .message{ font-size:80px; margin-bottom:40px } .submessage{ font-size:40px; margin-bottom:40px } .copyright{ font-size:20px; } a{ text-decoration:none; color:#3498db } </style> </head> <body> <div class="container"> <div class="content"> <div class="message">LinkerX CDN</div> <div class="submessage">'+error_message+'</div> <div class="copyright">Hash Hackers and LiquidX Projects</div> </div> </div> </body> </html>', content_type="text/html"
         )
 
+async def get_authenticated_user(request: web.Request):
+    """Helper to get authenticated user from session"""
+    session_token = request.cookies.get('session_token')
+    
+    if not session_token:
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            session_token = auth_header[7:]
+    
+    if not session_token:
+        return None
+    
+    db = get_database()
+    if not db.auth:
+        return None
+    
+    telegram_user_id = db.auth.validate_session(session_token)
+    if not telegram_user_id:
+        return None
+    
+    return db.auth.get_user(telegram_user_id)
+
+@routes.get("/files/{unique_file_id}", allow_head=True)
+async def file_detail_page(request: web.Request):
+    """Display file details page with download button (requires auth)"""
+    try:
+        unique_file_id = request.match_info['unique_file_id']
+        
+        # Check authentication
+        user = await get_authenticated_user(request)
+        
+        if not user:
+            # Show login page
+            return web.Response(text=get_login_page_html(), content_type="text/html")
+        
+        # Get file info
+        db = get_database()
+        file_data = db.get_file_ids(unique_file_id)
+        
+        if not file_data:
+            raise web.HTTPNotFound(text="File not found")
+        
+        # Get rate limit info
+        rate_limits = {}
+        if db.rate_limiter:
+            rate_limits = db.rate_limiter.get_limits(user['telegram_user_id'])
+        
+        # Generate file page HTML
+        html = get_file_detail_html(unique_file_id, file_data, user, rate_limits)
+        return web.Response(text=html, content_type="text/html")
+        
+    except web.HTTPNotFound:
+        raise
+    except Exception as e:
+        logging.error(f"Error in file_detail_page: {e}", exc_info=True)
+        return web.Response(
+            text='<html><body><h1>Error</h1><p>Failed to load file details</p></body></html>',
+            content_type="text/html"
+        )
+
 @routes.get("/files", allow_head=True)
 async def files_list_handler(request: web.Request):
-    """Display all files from database with search functionality"""
+    """Display all files from database with search functionality (requires auth)"""
     try:
+        # Check authentication
+        user = await get_authenticated_user(request)
+        
+        if not user:
+            # Show login page
+            return web.Response(text=get_login_page_html(), content_type="text/html")
         # Get search query parameter
         search_query = request.query.get('search', '').strip()
         
