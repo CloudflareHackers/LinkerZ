@@ -266,6 +266,16 @@ class Database:
             logging.error(f"Failed to get file count: {e}")
             return 0
     
+    def initialize_auth_system(self):
+        """Initialize authentication and rate limiting systems"""
+        try:
+            self.auth = AuthSystem(self.conn)
+            self.rate_limiter = RateLimiter(self.conn)
+            logging.info("Authentication system initialized")
+        except Exception as e:
+            logging.error(f"Failed to initialize auth system: {e}")
+            raise
+    
     def close(self):
         """Close database connection"""
         if self.conn:
