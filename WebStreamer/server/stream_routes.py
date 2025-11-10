@@ -219,6 +219,13 @@ async def files_list_handler(request: web.Request):
             </tr>
             """
         
+        # Prepare user and rate limit info
+        user_name = user.get('first_name', 'User')
+        rate_hour_used = rate_limits.get('hour_used', 0) if rate_limits else 0
+        rate_hour_limit = rate_limits.get('hour_limit', 10) if rate_limits else 10
+        rate_day_used = rate_limits.get('day_used', 0) if rate_limits else 0
+        rate_day_limit = rate_limits.get('day_limit', 50) if rate_limits else 50
+        
         # Build complete HTML page
         html_content = f"""
         <!DOCTYPE html>
@@ -255,6 +262,61 @@ async def files_list_handler(request: web.Request):
                     max-width: 1400px;
                     margin: 30px auto;
                     padding: 0 20px;
+                }}
+                .user-info-box {{
+                    background: white;
+                    padding: 20px 25px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+                    margin-bottom: 25px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                }}
+                .user-details {{
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }}
+                .user-name {{
+                    font-size: 18px;
+                    font-weight: 600;
+                    color: #2c3e50;
+                }}
+                .limits-info {{
+                    display: flex;
+                    gap: 20px;
+                    flex-wrap: wrap;
+                }}
+                .limit-item {{
+                    display: flex;
+                    flex-direction: column;
+                    gap: 5px;
+                }}
+                .limit-label {{
+                    font-size: 12px;
+                    color: #7f8c8d;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }}
+                .limit-value {{
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: #667eea;
+                }}
+                .limit-bar {{
+                    width: 150px;
+                    height: 6px;
+                    background: #ecf0f1;
+                    border-radius: 3px;
+                    overflow: hidden;
+                }}
+                .limit-bar-fill {{
+                    height: 100%;
+                    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+                    transition: width 0.3s;
                 }}
                 .search-box {{
                     background: white;
