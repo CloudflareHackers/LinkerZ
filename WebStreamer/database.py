@@ -5,6 +5,8 @@ import random
 from typing import Optional, Dict, List
 from .vars import Var
 from os import environ
+from .auth import AuthSystem
+from .rate_limiter import RateLimiter
 
 class Database:
     def __init__(self):
@@ -14,8 +16,11 @@ class Database:
             raise ValueError("DATABASE_URL is required")
         
         self.conn = None
+        self.auth = None
+        self.rate_limiter = None
         self.connect()
         self.create_table()
+        self.initialize_auth_system()
     
     def connect(self):
         """Establish database connection"""
