@@ -1440,7 +1440,13 @@ def get_login_page_html():
                         document.getElementById('step2').classList.add('active');
                         document.getElementById('otp').focus();
                     } else {
-                        showMessage(data.message || 'Failed to send OTP', 'error');
+                        // Check if it's a peer_not_found error
+                        if (data.error_type === 'peer_not_found' && data.bot_link) {
+                            const botLink = data.bot_link;
+                            showMessage(`⚠️ Please start the bot first! <a href="${botLink}" target="_blank" style="color: #0c5460; text-decoration: underline; font-weight: bold;">Click here to start the bot</a>, then try again.`, 'info');
+                        } else {
+                            showMessage(data.message || 'Failed to send OTP', 'error');
+                        }
                         btn.disabled = false;
                         btn.textContent = 'Request OTP';
                     }
