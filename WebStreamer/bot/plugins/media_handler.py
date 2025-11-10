@@ -150,23 +150,65 @@ def register_multi_client_handlers():
             # Skip base bot, already has handler registered
             continue
         
-        # Create handler function with proper closure
-        def make_handler(bot_idx):
+        # ===== Channel/Group Media Handler =====
+        # Create handler function with proper closure for channel messages
+        def make_channel_handler(bot_idx):
             async def handler(client, message: Message):
                 """Handle media files on multi-client - stores silently without reply"""
                 await store_channel_media(client, message, bot_index=bot_idx, should_reply=False)
             return handler
         
         # Create the handler with captured bot_index
-        handler_func = make_handler(bot_index)
+        channel_handler_func = make_channel_handler(bot_index)
         
-        # Register handler on this client
+        # Register channel/group handler on this client
         bot_client.add_handler(
             MessageHandler(
-                handler_func,
+                channel_handler_func,
                 filters=(filters.channel | filters.group) & MEDIA_FILTER
             ),
             group=1
         )
         
-        logging.info(f"Registered media handler on bot {bot_index + 1} (b_{bot_index + 1})")
+        logging.info(f"Registered channel media handler on bot {bot_index + 1} (b_{bot_index + 1})")
+        
+        # ===== Private Message Handler =====
+        # Create handler for private messages
+        def make_private_handler(bot_idx):
+            async def handler(client, message: Message):
+                """Guide user to add bot to channel instead of sending files directly"""
+                try:
+                    # Don't store files from private messages
+                    bot_username = (await client.get_me()).username
+                    
+                    reply_text = "🤖 **Please add me to a channel to store files**\n\n"
+                    reply_text += "I don't store files from private messages. Instead:\n"
+                    reply_text += "1️⃣ Add me to a channel where you are an owner/admin\n"
+                    reply_text += "2️⃣ Post your files in that channel\n"
+                    reply_text += "3️⃣ I'll reply with a download link\n\n"
+                    reply_text += "👇 Click the button below to add me to your channel"
+                    
+                    keyboard = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("➕ Add Bot to Channel", 
+                                            url=f"https://t.me/{bot_username}?startchannel=true")]
+                    ])
+                    
+                    await message.reply_text(reply_text, reply_markup=keyboard)
+                    
+                except Exception as e:
+                    logging.error(f"[Bot {bot_idx + 1}] Error handling private media: {e}", exc_info=True)
+            return handler
+        
+        # Create private handler
+        private_handler_func = make_private_handler(bot_index)
+        
+        # Register private message handler
+        bot_client.add_handler(
+            MessageHandler(
+                private_handler_func,
+                filters=filters.private & MEDIA_FILTER
+            ),
+            group=1
+        )
+        
+        logging.info(f"Registered private media handler on bot {bot_index + 1} (b_{bot_index + 1})")
