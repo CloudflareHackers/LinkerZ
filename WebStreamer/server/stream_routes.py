@@ -595,6 +595,7 @@ async def files_list_handler(request: web.Request):
                             </div>
                         </div>
                     </div>
+                    <button class="logout-btn" onclick="handleLogout()">🚪 Logout</button>
                 </div>
                 
                 <div class="search-box">
