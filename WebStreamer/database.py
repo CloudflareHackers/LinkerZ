@@ -61,11 +61,13 @@ class Database:
             );
             """
             cursor.execute(create_table_query)
+            self.conn.commit()
             
             # Add columns if they don't exist (for existing databases)
             try:
                 cursor.execute("ALTER TABLE media_files ADD COLUMN IF NOT EXISTS dc_id INTEGER;")
                 cursor.execute("ALTER TABLE media_files ADD COLUMN IF NOT EXISTS channel_id BIGINT;")
+                self.conn.commit()
             except:
                 pass
             
