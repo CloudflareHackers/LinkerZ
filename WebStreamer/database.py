@@ -145,7 +145,7 @@ class Database:
             cursor.execute(
                 """
                 SELECT b_1, b_2, b_3, b_4, b_5, b_6, b_7, b_8, b_9, b_10, b_11,
-                       file_name, file_size, mime_type
+                       file_name, file_size, mime_type, dc_id, channel_id
                 FROM media_files WHERE unique_file_id = %s
                 """,
                 (unique_file_id,)
@@ -162,7 +162,9 @@ class Database:
                 'bot_file_ids': {},
                 'file_name': result[11],
                 'file_size': result[12],
-                'mime_type': result[13]
+                'mime_type': result[13],
+                'dc_id': result[14],
+                'channel_id': result[15]
             }
             
             # Collect non-null file_ids
