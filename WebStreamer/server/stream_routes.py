@@ -125,7 +125,7 @@ async def link_route_handler(request: web.Request):
         file_id = await tg_connect.get_file_properties(int(message_id), int(channel_id))
         
         # Extract file information
-        unique_file_id = file_id.file_unique_id
+        unique_file_id = file_id.unique_id  # Note: it's unique_id, not file_unique_id
         dc_id = file_id.dc_id
         file_name = file_id.file_name
         file_size = file_id.file_size
