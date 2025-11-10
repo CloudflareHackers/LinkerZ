@@ -1,9 +1,9 @@
 # Media handler plugin to store file information in database
 import logging
-from pyrogram import filters, Client
+from pyrogram import filters
 from pyrogram.types import Message
 from WebStreamer.database import get_database
-from WebStreamer.bot import multi_clients
+from WebStreamer.bot import StreamBot, multi_clients
 
 # Media types we want to track
 MEDIA_FILTER = (
@@ -12,19 +12,23 @@ MEDIA_FILTER = (
     | filters.document
 )
 
-async def store_media_info(client: Client, message: Message):
+async def store_media_info(client, message: Message):
     """Store media file information in database"""
     try:
         # Determine which bot received this message
         bot_index = None
-        for index, bot_client in multi_clients.items():
-            if bot_client.me.id == client.me.id:
-                bot_index = index
-                break
+        client_id = client.me.id if hasattr(client, 'me') else None
+        
+        if client_id:
+            for index, bot_client in multi_clients.items():
+                if bot_client.me.id == client_id:
+                    bot_index = index
+                    break
         
         if bot_index is None:
-            logging.warning(f"Could not identify bot index for client {client.me.username}")
-            return
+            # Default to 0 if we can't identify (main bot)
+            bot_index = 0
+            logging.warning(f"Could not identify bot index, using default (0)")
         
         # Get media information
         media = message.video or message.audio or message.document
@@ -55,13 +59,13 @@ async def store_media_info(client: Client, message: Message):
         logging.error(f"Error storing media info: {e}", exc_info=True)
 
 # Handler for private messages (direct to bot)
-@Client.on_message(filters.private & MEDIA_FILTER, group=1)
-async def handle_private_media(client: Client, message: Message):
+@StreamBot.on_message(filters.private & MEDIA_FILTER, group=1)
+async def handle_private_media(client, message: Message):
     """Handle media files sent directly to bot"""
     await store_media_info(client, message)
 
 # Handler for channel/group messages
-@Client.on_message((filters.channel | filters.group) & MEDIA_FILTER, group=1)
-async def handle_channel_media(client: Client, message: Message):
+@StreamBot.on_message((filters.channel | filters.group) & MEDIA_FILTER, group=1)
+async def handle_channel_media(client, message: Message):
     """Handle media files posted in channels/groups where bot is member"""
     await store_media_info(client, message)
