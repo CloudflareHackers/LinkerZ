@@ -150,6 +150,72 @@ async def file_detail_page(request: web.Request):
             content_type="text/html"
         )
 
+def generate_pagination_html(current_page, total_pages, search_query=""):
+    """Generate pagination HTML with page numbers and last page link"""
+    if total_pages <= 1:
+        return ""
+    
+    search_param = f"&search={search_query}" if search_query else ""
+    pagination_html = '<div class="pagination">'
+    
+    # Previous button
+    if current_page > 1:
+        pagination_html += f'<a href="/files?page={current_page - 1}{search_param}" class="page-btn">← Prev</a>'
+    else:
+        pagination_html += '<span class="page-btn disabled">← Prev</span>'
+    
+    # Page numbers logic
+    max_visible_pages = 5
+    
+    if total_pages <= max_visible_pages:
+        # Show all pages
+        for page_num in range(1, total_pages + 1):
+            if page_num == current_page:
+                pagination_html += f'<span class="page-btn active">{page_num}</span>'
+            else:
+                pagination_html += f'<a href="/files?page={page_num}{search_param}" class="page-btn">{page_num}</a>'
+    else:
+        # Smart pagination
+        # Always show first page
+        if current_page == 1:
+            pagination_html += f'<span class="page-btn active">1</span>'
+        else:
+            pagination_html += f'<a href="/files?page=1{search_param}" class="page-btn">1</a>'
+        
+        # Calculate range around current page
+        start_page = max(2, current_page - 1)
+        end_page = min(total_pages - 1, current_page + 1)
+        
+        # Show ellipsis if needed
+        if start_page > 2:
+            pagination_html += '<span class="page-ellipsis">...</span>'
+        
+        # Show pages around current
+        for page_num in range(start_page, end_page + 1):
+            if page_num == current_page:
+                pagination_html += f'<span class="page-btn active">{page_num}</span>'
+            else:
+                pagination_html += f'<a href="/files?page={page_num}{search_param}" class="page-btn">{page_num}</a>'
+        
+        # Show ellipsis if needed
+        if end_page < total_pages - 1:
+            pagination_html += '<span class="page-ellipsis">...</span>'
+        
+        # Always show last page
+        if current_page == total_pages:
+            pagination_html += f'<span class="page-btn active">{total_pages}</span>'
+        else:
+            pagination_html += f'<a href="/files?page={total_pages}{search_param}" class="page-btn">{total_pages}</a>'
+    
+    # Next button
+    if current_page < total_pages:
+        pagination_html += f'<a href="/files?page={current_page + 1}{search_param}" class="page-btn">Next →</a>'
+    else:
+        pagination_html += '<span class="page-btn disabled">Next →</span>'
+    
+    pagination_html += '</div>'
+    return pagination_html
+
 @routes.get("/files", allow_head=True)
 async def files_list_handler(request: web.Request):
     """Display all files from database with search functionality (requires auth)"""
