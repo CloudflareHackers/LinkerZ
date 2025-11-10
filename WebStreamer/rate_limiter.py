@@ -43,6 +43,7 @@ class RateLimiter:
                     (telegram_user_id, hour_count, day_count, hour_reset, day_reset)
                     VALUES (%s, 1, 1, %s, %s)
                 """, (telegram_user_id, hour_reset, day_reset))
+                self.conn.commit()
                 
                 cursor.close()
                 logging.info(f"Created rate limit record for user {telegram_user_id}")
