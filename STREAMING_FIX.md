@@ -10,77 +10,51 @@
 
 **Root Cause:** The `Session` class in Pyrogram/kurigram has wildly different signatures across versions and forks. The production environment uses a version with a completely different API than the development code expected.
 
-## ✅ Fix Applied
+## ✅ Fix Applied (v2 - Advanced Runtime Detection)
 
 ### What Was Changed
 
-Modified the `Session` initialization in `custom_dl.py` to handle both old and new Pyrogram Session signatures.
+Created a `create_session_safe()` helper function that:
+1. **Inspects** the Session class signature at runtime
+2. **Tries multiple patterns** to create the Session
+3. **Logs detailed information** about what worked/failed
+4. **Raises clear errors** if all patterns fail
 
-**File:** `/app/WebStreamer/utils/custom_dl.py`
-
-### Changes Made
-
-#### 1. Lines 70-95 (Different DC Session Creation)
 ```python
-# Before:
-media_session = Session(
-    client,
-    file_id.dc_id,
-    await Auth(...).create(),
-    await client.storage.test_mode(),
-    is_media=True,
-)
-
-# After:
-auth_key = await Auth(...).create()
-test_mode = await client.storage.test_mode()
-
-try:
-    # Try old signature (positional args)
-    media_session = Session(
-        client, file_id.dc_id, auth_key, test_mode, is_media=True
-    )
-except TypeError:
-    # Fallback to keyword arguments
-    media_session = Session(
-        client=client,
-        dc_id=file_id.dc_id,
-        auth_key=auth_key,
-        test_mode=test_mode,
-        is_media=True,
-    )
-```
-
-#### 2. Lines 103-118 (Same DC Session Creation)
-```python
-# Before:
-media_session = Session(
-    client,
-    file_id.dc_id,
-    await client.storage.auth_key(),
-    await client.storage.test_mode(),
-    is_media=True,
-)
-
-# After:
-try:
-    # Try old signature (positional args)
-    media_session = Session(
-        client,
-        file_id.dc_id,
-        await client.storage.auth_key(),
-        await client.storage.test_mode(),
-        is_media=True,
-    )
-except TypeError:
-    # Fallback to keyword arguments
-    media_session = Session(
-        client=client,
-        dc_id=file_id.dc_id,
-        auth_key=await client.storage.auth_key(),
-        test_mode=await client.storage.test_mode(),
-        is_media=True,
-    )
+def create_session_safe(client, dc_id, auth_key, test_mode, is_media=True):
+    """
+    Safely create a Session object with compatibility for different Pyrogram versions.
+    Tries multiple signature patterns to find the one that works.
+    """
+    sig = inspect.signature(Session.__init__)
+    param_names = [p for p in sig.parameters.keys() if p != 'self']
+    
+    # Try Pattern 1: Positional arguments
+    try:
+        return Session(client, dc_id, auth_key, test_mode, is_media=is_media)
+    except TypeError:
+        pass
+    
+    # Try Pattern 2: Keyword arguments
+    try:
+        return Session(
+            client=client,
+            dc_id=dc_id,
+            auth_key=auth_key,
+            test_mode=test_mode,
+            is_media=is_media
+        )
+    except TypeError:
+        pass
+    
+    # Try Pattern 3: Without is_media
+    try:
+        return Session(client, dc_id, auth_key, test_mode)
+    except TypeError:
+        pass
+    
+    # Log and fail with details
+    raise RuntimeError(f"Could not create Session. Parameters: {param_names}")
 ```
 
 ## 🔍 Technical Details
