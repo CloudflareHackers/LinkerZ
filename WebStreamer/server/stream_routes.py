@@ -379,7 +379,7 @@ async def files_list_handler(request: web.Request):
         else:
             rows_html = """
             <tr>
-                <td colspan="5" style="padding: 40px; text-align: center; color: #95a5a6; font-size: 18px;">
+                <td colspan="4" style="padding: 40px; text-align: center; color: #95a5a6; font-size: 18px;">
                     No files found
                 </td>
             </tr>
