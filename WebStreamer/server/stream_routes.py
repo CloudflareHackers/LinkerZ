@@ -286,7 +286,19 @@ async def files_list_handler(request: web.Request):
             """
         
         # Prepare user and rate limit info
-        user_name = user.get('first_name', 'User')
+        first_name = user.get('first_name') or ''
+        last_name = user.get('last_name') or ''
+        user_id = user.get('telegram_user_id', '')
+        
+        # Build display name
+        if first_name or last_name:
+            user_name = f"{first_name} {last_name}".strip()
+        else:
+            user_name = "User"
+        
+        # Add user ID in parentheses
+        user_name = f"{user_name} ({user_id})"
+        
         rate_hour_used = rate_limits.get('hour_used', 0) if rate_limits else 0
         rate_hour_limit = rate_limits.get('hour_limit', 10) if rate_limits else 10
         rate_day_used = rate_limits.get('day_used', 0) if rate_limits else 0
