@@ -169,6 +169,7 @@ class AuthSystem:
                 SET verified = TRUE, verified_at = CURRENT_TIMESTAMP
                 WHERE id = %s
             """, (otp_id,))
+            self.conn.commit()
             
             cursor.close()
             logging.info(f"OTP verified for user {telegram_user_id}")
