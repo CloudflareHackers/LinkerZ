@@ -151,24 +151,14 @@ class ByteStreamer:
                     await media_session.stop()
                     raise AuthBytesInvalid
             else:
-                try:
-                    # Try the old signature (positional args)
-                    media_session = Session(
-                        client,
-                        file_id.dc_id,
-                        await client.storage.auth_key(),
-                        await client.storage.test_mode(),
-                        is_media=True,
-                    )
-                except TypeError:
-                    # If that fails, try with keyword arguments
-                    media_session = Session(
-                        client=client,
-                        dc_id=file_id.dc_id,
-                        auth_key=await client.storage.auth_key(),
-                        test_mode=await client.storage.test_mode(),
-                        is_media=True,
-                    )
+                # Use safe session creation
+                media_session = create_session_safe(
+                    client,
+                    file_id.dc_id,
+                    await client.storage.auth_key(),
+                    await client.storage.test_mode(),
+                    is_media=True
+                )
                 await media_session.start()
             logging.debug(f"Created media session for DC {file_id.dc_id}")
             client.media_sessions[file_id.dc_id] = media_session
