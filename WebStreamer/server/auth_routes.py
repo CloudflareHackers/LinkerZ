@@ -288,3 +288,26 @@ async def logout(request: web.Request):
             'success': False,
             'message': 'Internal server error'
         }, status=500)
+
+
+@routes.get("/api/bot-info")
+async def get_bot_info(request: web.Request):
+    """Get bot information (username, etc.)"""
+    try:
+        from WebStreamer.bot import StreamBot
+        bot_me = await StreamBot.get_me()
+        
+        return web.json_response({
+            'success': True,
+            'bot_username': bot_me.username,
+            'bot_first_name': bot_me.first_name,
+            'bot_id': bot_me.id
+        })
+        
+    except Exception as e:
+        logging.error(f"Error getting bot info: {e}", exc_info=True)
+        return web.json_response({
+            'success': False,
+            'message': 'Failed to get bot information'
+        }, status=500)
+
