@@ -940,3 +940,621 @@ async def formatFileSize(bytes):
     sizes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
     i = math.floor(math.log(bytes) / math.log(k))
     return f"{round(bytes / math.pow(k, i), 2)} {sizes[i]}"
+
+def get_login_page_html():
+    """Generate HTML for login page"""
+    return """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login - LinkerX CDN</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }
+            .login-container {
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                max-width: 400px;
+                width: 100%;
+                padding: 40px 30px;
+            }
+            .logo {
+                text-align: center;
+                margin-bottom: 30px;
+            }
+            .logo h1 {
+                color: #667eea;
+                font-size: 32px;
+                margin-bottom: 10px;
+            }
+            .logo p {
+                color: #666;
+                font-size: 14px;
+            }
+            .form-group {
+                margin-bottom: 20px;
+            }
+            .form-group label {
+                display: block;
+                color: #333;
+                font-weight: 600;
+                margin-bottom: 8px;
+                font-size: 14px;
+            }
+            .form-group input {
+                width: 100%;
+                padding: 12px 15px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                font-size: 14px;
+                transition: border-color 0.3s;
+            }
+            .form-group input:focus {
+                outline: none;
+                border-color: #667eea;
+            }
+            .btn {
+                width: 100%;
+                padding: 12px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: transform 0.2s;
+            }
+            .btn:hover {
+                transform: translateY(-2px);
+            }
+            .btn:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+            .message {
+                padding: 12px;
+                border-radius: 6px;
+                margin-bottom: 20px;
+                font-size: 14px;
+            }
+            .message.success {
+                background: #d4edda;
+                color: #155724;
+                border: 1px solid #c3e6cb;
+            }
+            .message.error {
+                background: #f8d7da;
+                color: #721c24;
+                border: 1px solid #f5c6cb;
+            }
+            .message.info {
+                background: #d1ecf1;
+                color: #0c5460;
+                border: 1px solid #bee5eb;
+            }
+            .step-indicator {
+                text-align: center;
+                margin-bottom: 25px;
+            }
+            .step {
+                display: inline-block;
+                width: 30px;
+                height: 30px;
+                line-height: 30px;
+                border-radius: 50%;
+                background: #e0e0e0;
+                color: #666;
+                font-weight: 600;
+                margin: 0 5px;
+            }
+            .step.active {
+                background: #667eea;
+                color: white;
+            }
+            .help-text {
+                text-align: center;
+                color: #666;
+                font-size: 13px;
+                margin-top: 20px;
+                line-height: 1.6;
+            }
+            .hidden {
+                display: none;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="login-container">
+            <div class="logo">
+                <h1>🔐 LinkerX CDN</h1>
+                <p>Secure File Access</p>
+            </div>
+
+            <div class="step-indicator">
+                <span class="step active" id="step1">1</span>
+                <span class="step" id="step2">2</span>
+            </div>
+
+            <div id="message-container"></div>
+
+            <!-- Step 1: Enter Telegram ID -->
+            <div id="step-telegram-id">
+                <div class="form-group">
+                    <label for="telegram_user_id">Telegram User ID</label>
+                    <input type="number" id="telegram_user_id" placeholder="Enter your Telegram User ID" required>
+                </div>
+                <button class="btn" onclick="requestOTP()">Request OTP</button>
+                <div class="help-text">
+                    Don't know your Telegram ID?<br>
+                    Send /start to our bot to get your ID
+                </div>
+            </div>
+
+            <!-- Step 2: Enter OTP -->
+            <div id="step-otp" class="hidden">
+                <div class="form-group">
+                    <label for="otp">Enter OTP</label>
+                    <input type="text" id="otp" placeholder="Enter 6-digit code" maxlength="6" pattern="[0-9]{6}" required>
+                </div>
+                <button class="btn" onclick="verifyOTP()">Verify & Login</button>
+                <div class="help-text">
+                    Check your Telegram for the OTP code<br>
+                    <a href="#" onclick="backToStep1(); return false;" style="color: #667eea;">Request new code</a>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let currentUserId = null;
+
+            function showMessage(text, type = 'info') {
+                const container = document.getElementById('message-container');
+                container.innerHTML = `<div class="message ${type}">${text}</div>`;
+                setTimeout(() => {
+                    if (container.firstChild && container.firstChild.classList.contains(type)) {
+                        container.innerHTML = '';
+                    }
+                }, 5000);
+            }
+
+            function requestOTP() {
+                const userIdInput = document.getElementById('telegram_user_id');
+                const userId = userIdInput.value.trim();
+
+                if (!userId) {
+                    showMessage('Please enter your Telegram User ID', 'error');
+                    return;
+                }
+
+                currentUserId = userId;
+                const btn = event.target;
+                btn.disabled = true;
+                btn.textContent = 'Sending...';
+
+                fetch('/api/auth/request-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telegram_user_id: userId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showMessage('OTP sent to your Telegram! Check your messages.', 'success');
+                        document.getElementById('step-telegram-id').classList.add('hidden');
+                        document.getElementById('step-otp').classList.remove('hidden');
+                        document.getElementById('step1').classList.remove('active');
+                        document.getElementById('step2').classList.add('active');
+                        document.getElementById('otp').focus();
+                    } else {
+                        showMessage(data.message || 'Failed to send OTP', 'error');
+                        btn.disabled = false;
+                        btn.textContent = 'Request OTP';
+                    }
+                })
+                .catch(error => {
+                    showMessage('Network error. Please try again.', 'error');
+                    btn.disabled = false;
+                    btn.textContent = 'Request OTP';
+                });
+            }
+
+            function verifyOTP() {
+                const otpInput = document.getElementById('otp');
+                const otp = otpInput.value.trim();
+
+                if (!otp || otp.length !== 6) {
+                    showMessage('Please enter a valid 6-digit OTP', 'error');
+                    return;
+                }
+
+                const btn = event.target;
+                btn.disabled = true;
+                btn.textContent = 'Verifying...';
+
+                fetch('/api/auth/verify-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        telegram_user_id: currentUserId,
+                        otp: otp 
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showMessage('Login successful! Redirecting...', 'success');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        showMessage(data.message || 'Invalid or expired OTP', 'error');
+                        btn.disabled = false;
+                        btn.textContent = 'Verify & Login';
+                    }
+                })
+                .catch(error => {
+                    showMessage('Network error. Please try again.', 'error');
+                    btn.disabled = false;
+                    btn.textContent = 'Verify & Login';
+                });
+            }
+
+            function backToStep1() {
+                document.getElementById('step-otp').classList.add('hidden');
+                document.getElementById('step-telegram-id').classList.remove('hidden');
+                document.getElementById('step2').classList.remove('active');
+                document.getElementById('step1').classList.add('active');
+                document.getElementById('otp').value = '';
+                document.getElementById('message-container').innerHTML = '';
+            }
+
+            // Allow Enter key to submit
+            document.getElementById('telegram_user_id').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') requestOTP();
+            });
+            document.getElementById('otp').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') verifyOTP();
+            });
+        </script>
+    </body>
+    </html>
+    """
+
+def get_file_detail_html(unique_file_id, file_data, user, rate_limits):
+    """Generate HTML for file detail page"""
+    file_name = file_data.get('file_name', 'Unknown')
+    file_size_bytes = file_data.get('file_size', 0)
+    mime_type = file_data.get('mime_type', 'Unknown')
+    dc_id = file_data.get('dc_id', 'Unknown')
+    
+    # Format file size
+    import math
+    if file_size_bytes == 0:
+        file_size = "0B"
+    else:
+        k = 1024
+        sizes = ["B", "KB", "MB", "GB", "TB"]
+        i = math.floor(math.log(file_size_bytes) / math.log(k))
+        file_size = f"{round(file_size_bytes / math.pow(k, i), 2)} {sizes[i]}"
+    
+    user_name = user.get('first_name', 'User')
+    rate_hour_used = rate_limits.get('hour_used', 0) if rate_limits else 0
+    rate_hour_limit = rate_limits.get('hour_limit', 10) if rate_limits else 10
+    rate_day_used = rate_limits.get('day_used', 0) if rate_limits else 0
+    rate_day_limit = rate_limits.get('day_limit', 50) if rate_limits else 50
+    
+    return f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{file_name} - LinkerX CDN</title>
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: #f5f6fa;
+                min-height: 100vh;
+            }}
+            .header {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }}
+            .header-content {{
+                max-width: 1200px;
+                margin: 0 auto;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }}
+            .header h1 {{
+                font-size: 24px;
+            }}
+            .user-info {{
+                display: flex;
+                align-items: center;
+                gap: 15px;
+            }}
+            .btn-logout {{
+                background: rgba(255,255,255,0.2);
+                border: 1px solid white;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 6px;
+                cursor: pointer;
+                text-decoration: none;
+                font-size: 14px;
+                transition: background 0.3s;
+            }}
+            .btn-logout:hover {{
+                background: rgba(255,255,255,0.3);
+            }}
+            .container {{
+                max-width: 1200px;
+                margin: 30px auto;
+                padding: 0 20px;
+            }}
+            .breadcrumb {{
+                margin-bottom: 20px;
+                font-size: 14px;
+                color: #666;
+            }}
+            .breadcrumb a {{
+                color: #667eea;
+                text-decoration: none;
+            }}
+            .breadcrumb a:hover {{
+                text-decoration: underline;
+            }}
+            .file-card {{
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+                padding: 30px;
+            }}
+            .file-header {{
+                border-bottom: 2px solid #f0f0f0;
+                padding-bottom: 20px;
+                margin-bottom: 20px;
+            }}
+            .file-header h2 {{
+                color: #333;
+                font-size: 24px;
+                word-break: break-word;
+                margin-bottom: 10px;
+            }}
+            .file-meta {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px;
+                margin-bottom: 30px;
+            }}
+            .meta-item {{
+                padding: 15px;
+                background: #f8f9fa;
+                border-radius: 8px;
+            }}
+            .meta-label {{
+                font-size: 12px;
+                color: #666;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 5px;
+            }}
+            .meta-value {{
+                font-size: 18px;
+                color: #333;
+                font-weight: 600;
+            }}
+            .download-section {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 25px;
+                border-radius: 12px;
+                text-align: center;
+                margin-bottom: 30px;
+            }}
+            .download-section h3 {{
+                margin-bottom: 15px;
+                font-size: 20px;
+            }}
+            .btn-download {{
+                background: white;
+                color: #667eea;
+                padding: 15px 40px;
+                border: none;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: transform 0.2s;
+                display: inline-block;
+            }}
+            .btn-download:hover {{
+                transform: translateY(-2px);
+            }}
+            .btn-download:disabled {{
+                opacity: 0.6;
+                cursor: not-allowed;
+            }}
+            .rate-limit-info {{
+                background: #fff3cd;
+                border: 1px solid #ffeaa7;
+                border-radius: 8px;
+                padding: 15px;
+                margin-top: 15px;
+                font-size: 14px;
+                color: #856404;
+            }}
+            .rate-limit-info strong {{
+                display: block;
+                margin-bottom: 8px;
+            }}
+            .progress-bar {{
+                background: #f0f0f0;
+                height: 8px;
+                border-radius: 4px;
+                overflow: hidden;
+                margin-top: 5px;
+            }}
+            .progress-fill {{
+                background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+                height: 100%;
+                transition: width 0.3s;
+            }}
+            .link-display {{
+                background: #f8f9fa;
+                border: 2px dashed #667eea;
+                border-radius: 8px;
+                padding: 15px;
+                margin-top: 15px;
+                word-break: break-all;
+                font-family: monospace;
+                font-size: 13px;
+                color: #333;
+                display: none;
+            }}
+            .message {{
+                padding: 12px;
+                border-radius: 6px;
+                margin-bottom: 15px;
+                font-size: 14px;
+            }}
+            .message.success {{ background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }}
+            .message.error {{ background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }}
+            .message.info {{ background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="header-content">
+                <h1>📁 LinkerX CDN</h1>
+                <div class="user-info">
+                    <span>👤 {user_name}</span>
+                    <a href="#" onclick="logout(); return false;" class="btn-logout">Logout</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="breadcrumb">
+                <a href="/files">← Back to Files</a>
+            </div>
+
+            <div class="file-card">
+                <div class="file-header">
+                    <h2>📄 {file_name}</h2>
+                </div>
+
+                <div class="file-meta">
+                    <div class="meta-item">
+                        <div class="meta-label">File Size</div>
+                        <div class="meta-value">{file_size}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">MIME Type</div>
+                        <div class="meta-value">{mime_type}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">DC Location</div>
+                        <div class="meta-value">DC {dc_id}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Unique ID</div>
+                        <div class="meta-value" style="font-size: 12px; word-break: break-all;">{unique_file_id}</div>
+                    </div>
+                </div>
+
+                <div class="download-section">
+                    <h3>🔒 Secure Download</h3>
+                    <div id="message-container"></div>
+                    <button class="btn-download" onclick="generateDownloadLink()">Generate Download Link</button>
+                    
+                    <div class="rate-limit-info">
+                        <strong>⏱️ Rate Limits:</strong>
+                        <div>Hourly: {rate_hour_used}/{rate_hour_limit} links generated</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {(rate_hour_used/rate_hour_limit*100)}%"></div>
+                        </div>
+                        <div style="margin-top: 10px;">Daily: {rate_day_used}/{rate_day_limit} links generated</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {(rate_day_used/rate_day_limit*100)}%"></div>
+                        </div>
+                    </div>
+
+                    <div id="link-display" class="link-display"></div>
+                </div>
+
+                <div style="text-align: center; color: #666; font-size: 13px; margin-top: 20px;">
+                    ℹ️ Download links are valid for 3 hours
+                </div>
+            </div>
+        </div>
+
+        <script>
+            function showMessage(text, type = 'info') {{
+                const container = document.getElementById('message-container');
+                container.innerHTML = `<div class="message ${{type}}">${{text}}</div>`;
+            }}
+
+            function generateDownloadLink() {{
+                const btn = event.target;
+                btn.disabled = true;
+                btn.textContent = 'Generating...';
+                showMessage('Generating secure download link...', 'info');
+
+                fetch('/api/generate-download-link', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ unique_file_id: '{unique_file_id}' }})
+                }})
+                .then(response => response.json())
+                .then(data => {{
+                    if (data.success) {{
+                        showMessage('Download link generated successfully! Valid for 3 hours.', 'success');
+                        const linkDisplay = document.getElementById('link-display');
+                        linkDisplay.textContent = data.download_url;
+                        linkDisplay.style.display = 'block';
+                        
+                        // Change button to "Download Now"
+                        btn.textContent = 'Download Now';
+                        btn.onclick = () => {{ window.location.href = data.download_url; }};
+                        btn.disabled = false;
+                    }} else {{
+                        showMessage(data.message || 'Failed to generate download link', 'error');
+                        btn.disabled = false;
+                        btn.textContent = 'Generate Download Link';
+                    }}
+                }})
+                .catch(error => {{
+                    showMessage('Network error. Please try again.', 'error');
+                    btn.disabled = false;
+                    btn.textContent = 'Generate Download Link';
+                }});
+            }}
+
+            function logout() {{
+                fetch('/api/auth/logout', {{ method: 'POST' }})
+                .then(() => {{
+                    window.location.href = '/files';
+                }});
+            }}
+        </script>
+    </body>
+    </html>
+    """
