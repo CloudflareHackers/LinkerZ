@@ -204,6 +204,7 @@ class AuthSystem:
             return True
             
         except Exception as e:
+            self.conn.rollback()
             logging.error(f"Failed to create user: {e}")
             return False
     
