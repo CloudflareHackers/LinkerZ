@@ -127,7 +127,7 @@ async def initialize_clients():
                 api_hash=Var.API_HASH,
                 bot_token=token,
                 sleep_threshold=Var.SLEEP_THRESHOLD,
-                no_updates=True,
+                no_updates=False,  # Changed to False to receive updates for media handling
                 in_memory=False
             ).start()
             work_loads[client_id] = 0
