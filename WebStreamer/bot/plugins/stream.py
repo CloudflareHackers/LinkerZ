@@ -13,32 +13,5 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 
 
-@StreamBot.on_message(
-    filters.private
-    & (
-        filters.document
-        | filters.video
-        | filters.audio
-        | filters.animation
-        | filters.voice
-        | filters.video_note
-        | filters.photo
-        | filters.sticker
-    ),
-    group=4,
-)
-async def media_receive_handler(_, m: Message):
-    log_msg = await m.copy(chat_id=Var.BIN_CHANNEL)
-    stream_link = f"{Var.URL}{Var.BIN_CHANNEL_WITHOUT_MINUS}/{log_msg.id}"
-    short_link = f"{Var.URL}{Var.BIN_CHANNEL_WITHOUT_MINUS}/{log_msg.id}"
-    rm = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Open", url=stream_link)]]
-    )
-    if Var.FQDN == Var.BIND_ADDRESS:
-        # dkabl
-        rm = None
-    await m.reply_text(
-        text="Direct Access Not Allowed. Visit @LinkerX2Bot",
-        quote=True,
-        parse_mode=ParseMode.HTML,
-    )
+# This handler has been removed - media files in private messages 
+# are now handled by media_handler.py plugin
