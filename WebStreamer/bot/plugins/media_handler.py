@@ -257,6 +257,11 @@ async def store_channel_media(client, message: Message, bot_index: int, should_r
                 reply_text += f"**Size:** {size_str}\n"
                 reply_text += f"**Type:** {mime_str}\n"
                 reply_text += f"**Location:** {dc_str}\n\n"
+                
+                # Add note about R2 upload
+                if is_first_bot:
+                    reply_text += f"⏱️ Collecting all bot IDs... R2 upload in {R2_UPLOAD_DELAY}s\n\n"
+                
                 reply_text += f"🔗 View and download at: {file_link}"
                 
                 # Create button
