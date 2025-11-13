@@ -199,13 +199,11 @@ async def store_channel_media(client, message: Message, bot_index: int, should_r
                 await message.reply_text(reply_text, reply_markup=keyboard)
         
         else:
-            # File doesn't exist in R2, need to upload
-            logging.info(f"[Bot {bot_index + 1}] New file detected, uploading to R2: {unique_file_id}")
+            # File doesn't exist in R2 - new file detected
+            logging.info(f"[Bot {bot_index + 1}] New file detected: {unique_file_id}")
             
-            # Get all bot file IDs from database first
+            # Store this bot's file_id in database immediately
             db = get_database()
-            
-            # Store this bot's file_id in database first
             db.store_file(
                 unique_file_id=unique_file_id,
                 bot_index=bot_index,
@@ -217,38 +215,28 @@ async def store_channel_media(client, message: Message, bot_index: int, should_r
                 channel_id=channel_id
             )
             
-            # Retrieve all bot file IDs for this file
-            file_data = db.get_file_ids(unique_file_id)
+            # Check if this is the FIRST bot to see this file
+            is_first_bot = unique_file_id not in pending_r2_uploads
             
-            # Build bot_file_ids dict in R2 format
-            bot_file_ids = {}
-            if file_data and 'bot_file_ids' in file_data:
-                for bot_idx, bot_file_id in file_data['bot_file_ids'].items():
-                    bot_file_ids[f"b_{bot_idx + 1}_file_id"] = bot_file_id
+            if is_first_bot:
+                # Mark as pending and schedule delayed R2 upload
+                pending_r2_uploads.add(unique_file_id)
+                logging.info(f"[Bot {bot_index + 1}] Scheduling R2 upload in {R2_UPLOAD_DELAY}s: {unique_file_id}")
+                
+                # Schedule delayed upload task
+                asyncio.create_task(delayed_r2_upload(
+                    unique_file_id=unique_file_id,
+                    file_name=file_name,
+                    file_size=file_size,
+                    file_type=file_type,
+                    mime_type=mime_type,
+                    caption=caption,
+                    message_id=message_id,
+                    channel_id=channel_id
+                ))
             else:
-                # Fallback: just use current bot's file_id
-                bot_file_ids[f"b_{bot_index + 1}_file_id"] = file_id
-            
-            # Format data for R2
-            r2_data = r2.format_file_data(
-                unique_file_id=unique_file_id,
-                bot_file_ids=bot_file_ids,
-                caption=caption,
-                file_size=file_size,
-                file_type=file_type,
-                message_id=message_id,
-                channel_id=channel_id,
-                file_name=file_name,
-                mime_type=mime_type
-            )
-            
-            # Upload to R2
-            upload_success = r2.upload_file_data(unique_file_id, r2_data)
-            
-            if upload_success:
-                logging.info(f"[Bot {bot_index + 1}] Successfully uploaded to R2: {unique_file_id}")
-            else:
-                logging.warning(f"[Bot {bot_index + 1}] Failed to upload to R2, but stored in database: {unique_file_id}")
+                # Another bot already scheduled the upload
+                logging.info(f"[Bot {bot_index + 1}] R2 upload already scheduled by another bot: {unique_file_id}")
             
             # Only reply if this is the base bot
             if should_reply:
