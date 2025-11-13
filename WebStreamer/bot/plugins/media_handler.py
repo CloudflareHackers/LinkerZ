@@ -35,6 +35,72 @@ def format_file_size(bytes_size: int) -> str:
         i += 1
     return f"{size:.2f} {sizes[i]}"
 
+async def delayed_r2_upload(unique_file_id: str, file_name: str, file_size: int, 
+                           file_type: str, mime_type: str, caption: str,
+                           message_id: int, channel_id: int):
+    """
+    Wait for all bots to see the file, then upload to R2 with all collected file_ids
+    
+    Args:
+        unique_file_id: Unique file identifier
+        file_name: Name of the file
+        file_size: File size in bytes
+        file_type: Type of file (video/audio/document)
+        mime_type: MIME type
+        caption: File caption
+        message_id: Original message ID
+        channel_id: Source channel ID
+    """
+    try:
+        # Wait for all bots to see and store the file
+        logging.info(f"[R2 Upload] Waiting {R2_UPLOAD_DELAY}s for all bots to report: {unique_file_id}")
+        await asyncio.sleep(R2_UPLOAD_DELAY)
+        
+        # Fetch all bot file_ids from database
+        db = get_database()
+        file_data = db.get_file_ids(unique_file_id)
+        
+        if not file_data or not file_data.get('bot_file_ids'):
+            logging.error(f"[R2 Upload] No file data found after delay: {unique_file_id}")
+            return
+        
+        # Build bot_file_ids dict in R2 format
+        bot_file_ids = {}
+        for bot_idx, bot_file_id in file_data['bot_file_ids'].items():
+            bot_file_ids[f"b_{bot_idx + 1}_file_id"] = bot_file_id
+        
+        logging.info(f"[R2 Upload] Collected {len(bot_file_ids)} bot file_ids for {unique_file_id}")
+        
+        # Format data for R2
+        r2 = get_r2_storage()
+        r2_data = r2.format_file_data(
+            unique_file_id=unique_file_id,
+            bot_file_ids=bot_file_ids,
+            caption=caption,
+            file_size=file_size,
+            file_type=file_type,
+            message_id=message_id,
+            channel_id=channel_id,
+            file_name=file_name,
+            mime_type=mime_type
+        )
+        
+        # Upload to R2
+        upload_success = r2.upload_file_data(unique_file_id, r2_data)
+        
+        if upload_success:
+            logging.info(f"[R2 Upload] Successfully uploaded to R2 with {len(bot_file_ids)} bot file_ids: {unique_file_id}")
+        else:
+            logging.warning(f"[R2 Upload] Failed to upload to R2: {unique_file_id}")
+        
+    except Exception as e:
+        logging.error(f"[R2 Upload] Error during delayed upload for {unique_file_id}: {e}", exc_info=True)
+    finally:
+        # Remove from pending set
+        if unique_file_id in pending_r2_uploads:
+            pending_r2_uploads.remove(unique_file_id)
+            logging.info(f"[R2 Upload] Removed from pending: {unique_file_id}")
+
 async def store_channel_media(client, message: Message, bot_index: int, should_reply: bool = False):
     """
     Store media file in database and R2. Only replies if should_reply=True.
