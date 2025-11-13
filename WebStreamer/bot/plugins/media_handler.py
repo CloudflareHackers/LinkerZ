@@ -1,5 +1,6 @@
 # Media handler plugin to store file information in database
 import logging
+import asyncio
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from WebStreamer.database import get_database
@@ -7,6 +8,12 @@ from WebStreamer.r2_storage import get_r2_storage
 from WebStreamer.bot import StreamBot, multi_clients
 from WebStreamer.vars import Var
 from pyrogram.file_id import FileId
+
+# Track files pending R2 upload (to avoid duplicate scheduled tasks)
+pending_r2_uploads = set()
+
+# R2 upload delay in seconds (wait for all bots to see the file)
+R2_UPLOAD_DELAY = 15
 
 # Media types we want to track
 MEDIA_FILTER = (
