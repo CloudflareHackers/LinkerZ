@@ -103,7 +103,8 @@ async def delayed_r2_upload(unique_file_id: str, file_name: str, file_size: int,
 
 async def store_channel_media(client, message: Message, bot_index: int, should_reply: bool = False):
     """
-    Store media file in database and R2. Only replies if should_reply=True.
+    Store media file in database. Schedule R2 upload after delay to collect all bot file_ids.
+    Only replies if should_reply=True.
     
     Args:
         client: Pyrogram client
