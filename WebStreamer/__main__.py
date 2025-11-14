@@ -21,8 +21,9 @@ logging.basicConfig(
     level=logging.INFO,
     datefmt="%d/%m/%Y %H:%M:%S",
     format="[%(asctime)s][%(levelname)s] => %(message)s",
-    handlers=[logging.StreamHandler(stream=sys.stdout),
-              logging.FileHandler("streambot.log", mode="a", encoding="utf-8")],)
+    # On Heroku, only log to stdout (Heroku captures and stores logs)
+    # This saves memory by not maintaining a log file
+    handlers=[logging.StreamHandler(stream=sys.stdout)],)
 
 logging.getLogger("aiohttp").setLevel(logging.ERROR)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
