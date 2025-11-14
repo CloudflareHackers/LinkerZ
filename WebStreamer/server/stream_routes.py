@@ -1257,7 +1257,9 @@ async def not_found(_):
         text='<html> <head> <title>LinkerX CDN</title> <style> body{ margin:0; padding:0; width:100%; height:100%; color:#b0bec5; display:table; font-weight:100; font-family:Lato } .container{ text-align:center; display:table-cell; vertical-align:middle } .content{ text-align:center; display:inline-block } .message{ font-size:80px; margin-bottom:40px } .submessage{ font-size:40px; margin-bottom:40px } .copyright{ font-size:20px; } a{ text-decoration:none; color:#3498db } </style> </head> <body> <div class="container"> <div class="content"> <div class="message">LinkerX CDN</div> <div class="submessage">Page Not Found</div> <div class="copyright">Hash Hackers and LiquidX Projects</div> </div> </div> </body> </html>', content_type="text/html"
     )
 
-class_cache = {}
+# Changed from unlimited dict to LRU cache with max 15 entries
+# This prevents unbounded memory growth from cached ByteStreamer objects
+class_cache = LRUCache(max_size=15)
 
 async def media_streamer(request: web.Request, message_id: int, channel_id):
     try:
