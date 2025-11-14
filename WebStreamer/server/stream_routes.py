@@ -19,11 +19,28 @@ from WebStreamer import Var, utils, StartTime, __version__, StreamBot
 from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 from WebStreamer.database import get_database
+from collections import OrderedDict
 
 # Optimized for Heroku 1GB dyno
 # 50 workers can handle 50 concurrent streaming requests
 # Previous value of 1000 was consuming 500-800MB of memory!
 THREADPOOL = ThreadPoolExecutor(max_workers=50)
+
+# LRU Cache for ByteStreamer objects with size limit
+class LRUCache(OrderedDict):
+    """Least Recently Used cache with maximum size limit"""
+    def __init__(self, max_size=15):
+        super().__init__()
+        self.max_size = max_size
+    
+    def __setitem__(self, key, value):
+        if key in self:
+            self.move_to_end(key)
+        super().__setitem__(key, value)
+        if len(self) > self.max_size:
+            oldest = next(iter(self))
+            del self[oldest]
+            logging.debug(f"LRU cache evicted oldest entry, cache size: {len(self)}")
 
 async def sync_to_async(func, *args, wait=True, **kwargs):
     pfunc = partial(func, *args, **kwargs)
