@@ -20,11 +20,18 @@ from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 from WebStreamer.database import get_database
 from collections import OrderedDict
+import os
 
-# Optimized for Heroku 1GB dyno
-# 50 workers can handle 50 concurrent streaming requests
-# Previous value of 1000 was consuming 500-800MB of memory!
-THREADPOOL = ThreadPoolExecutor(max_workers=50)
+# Configurable ThreadPool for handling concurrent streaming requests
+# Default: 250 workers for ~500 concurrent streams (uses ~250MB)
+# Can be overridden via THREADPOOL_WORKERS environment variable
+# Memory usage: ~1MB per worker
+# For 500 concurrent streams: 250 workers = ~250MB (balanced performance/memory)
+# Previous: 1000 workers = 800MB (too high), 50 workers = timeout issues with high load
+THREADPOOL_WORKERS = int(os.environ.get("THREADPOOL_WORKERS", "250"))
+THREADPOOL = ThreadPoolExecutor(max_workers=THREADPOOL_WORKERS)
+
+logging.info(f"ThreadPool initialized with {THREADPOOL_WORKERS} workers")
 
 # LRU Cache for ByteStreamer objects with size limit
 class LRUCache(OrderedDict):
