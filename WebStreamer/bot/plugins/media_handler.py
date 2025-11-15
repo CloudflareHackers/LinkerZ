@@ -249,6 +249,11 @@ async def store_channel_media(client, message: Message, bot_index: int, should_r
                 
                 file_link = f"https://{fqdn}/files/{unique_file_id}"
                 
+                # Generate 3-hour temporary download link
+                expires_at = int(time.time()) + (3 * 60 * 60)  # 3 hours from now
+                signature = generate_download_signature(unique_file_id, expires_at, Var.DOWNLOAD_SECRET_KEY)
+                temp_download_link = f"https://{fqdn}/download/{unique_file_id}/{expires_at}/{signature}"
+                
                 # Format file details
                 size_str = format_file_size(file_size)
                 dc_str = f"DC {dc_id}" if dc_id else "Unknown DC"
@@ -264,11 +269,12 @@ async def store_channel_media(client, message: Message, bot_index: int, should_r
                 if is_first_bot:
                     reply_text += f"⏱️ Collecting all bot IDs... R2 upload in {R2_UPLOAD_DELAY}s\n\n"
                 
-                reply_text += f"🔗 View and download at: {file_link}"
+                reply_text += f"📥 **Use the buttons below to access your file**"
                 
-                # Create button
+                # Two buttons for new files: View File and 3 Hour Link
                 keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📥 View File", url=file_link)]
+                    [InlineKeyboardButton("📥 View File", url=file_link)],
+                    [InlineKeyboardButton("⏱️ 3 Hour Link", url=temp_download_link)]
                 ])
                 
                 # Reply to the message
