@@ -190,9 +190,9 @@ async def store_channel_media(client, message: Message, bot_index: int, should_r
                 reply_text += f"**Size:** {size_str}\n"
                 reply_text += f"**Type:** {mime_str}\n"
                 reply_text += f"**Location:** {dc_str}\n\n"
-                reply_text += f"🔗 View and download at: {file_link}"
+                reply_text += f"📥 **Use the button below to view and download**"
                 
-                # Create button
+                # Create button - only View File for duplicates
                 keyboard = InlineKeyboardMarkup([
                     [InlineKeyboardButton("📥 View File", url=file_link)]
                 ])
