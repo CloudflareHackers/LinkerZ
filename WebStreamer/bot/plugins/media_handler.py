@@ -3,7 +3,7 @@ import logging
 import asyncio
 import time
 from pyrogram import filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from WebStreamer.database import get_database
 from WebStreamer.r2_storage import get_r2_storage
 from WebStreamer.bot import StreamBot, multi_clients
