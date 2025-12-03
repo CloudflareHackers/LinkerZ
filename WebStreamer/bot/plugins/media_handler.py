@@ -138,7 +138,10 @@ async def store_channel_media(client, message: Message, bot_index: int, should_r
         message_id = message.id
         
         # Get caption
-        caption = message.caption or file_name
+        caption = message.caption or ""
+        
+        # Check if message is forwarded
+        is_forwarded = message.forward_date is not None or message.forward_from is not None or message.forward_from_chat is not None
         
         # Determine file type
         if message.video:
@@ -154,68 +157,25 @@ async def store_channel_media(client, message: Message, bot_index: int, should_r
         # Check if file already exists in R2
         existing_r2_data = r2.check_file_exists(unique_file_id)
         
-        if existing_r2_data:
-            # File already exists in R2 - just update database
-            logging.info(f"[Bot {bot_index + 1}] File already exists in R2: {unique_file_id}")
-            
-            # Update bot file ID in database
-            db = get_database()
-            db.store_file(
-                unique_file_id=unique_file_id,
-                bot_index=bot_index,
-                file_id=file_id,
-                file_name=file_name,
-                file_size=file_size,
-                mime_type=mime_type,
-                dc_id=dc_id,
-                channel_id=channel_id
-            )
-            
-            # Only reply if this is the base bot
-            if should_reply:
-                # Generate file link
-                fqdn = Var.FQDN
-                if not fqdn:
-                    fqdn = "your-domain.com"
-                
-                file_link = f"https://{fqdn}/files/{unique_file_id}"
-                
-                # Format file details
-                size_str = format_file_size(file_size)
-                dc_str = f"DC {dc_id}" if dc_id else "Unknown DC"
-                mime_str = mime_type or "Unknown"
-                
-                reply_text = f"✅ **File Already Exists**\n\n"
-                reply_text += f"**Name:** {file_name}\n"
-                reply_text += f"**Size:** {size_str}\n"
-                reply_text += f"**Type:** {mime_str}\n"
-                reply_text += f"**Location:** {dc_str}\n\n"
-                reply_text += f"📥 **Use the button below to view and download**"
-                
-                # Create button - only View File for duplicates
-                keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📥 View File", url=file_link)]
-                ])
-                
-                # Reply to the message
-                await message.reply_text(reply_text, reply_markup=keyboard)
+        # Store this bot's file_id in database
+        db = get_database()
+        db.store_file(
+            unique_file_id=unique_file_id,
+            bot_index=bot_index,
+            file_id=file_id,
+            file_name=file_name,
+            file_size=file_size,
+            mime_type=mime_type,
+            dc_id=dc_id,
+            channel_id=channel_id
+        )
         
+        if existing_r2_data:
+            # File already exists in R2
+            logging.info(f"[Bot {bot_index + 1}] File already exists in R2: {unique_file_id}")
         else:
             # File doesn't exist in R2 - new file detected
             logging.info(f"[Bot {bot_index + 1}] New file detected: {unique_file_id}")
-            
-            # Store this bot's file_id in database immediately
-            db = get_database()
-            db.store_file(
-                unique_file_id=unique_file_id,
-                bot_index=bot_index,
-                file_id=file_id,
-                file_name=file_name,
-                file_size=file_size,
-                mime_type=mime_type,
-                dc_id=dc_id,
-                channel_id=channel_id
-            )
             
             # Check if this is the FIRST bot to see this file
             is_first_bot = unique_file_id not in pending_r2_uploads
@@ -239,46 +199,53 @@ async def store_channel_media(client, message: Message, bot_index: int, should_r
             else:
                 # Another bot already scheduled the upload
                 logging.info(f"[Bot {bot_index + 1}] R2 upload already scheduled by another bot: {unique_file_id}")
+        
+        # Only add buttons and caption if this is the base bot
+        if should_reply:
+            # Generate file links
+            fqdn = Var.FQDN
+            if not fqdn:
+                fqdn = "your-domain.com"
             
-            # Only reply if this is the base bot
-            if should_reply:
-                # Generate file link
-                fqdn = Var.FQDN
-                if not fqdn:
-                    fqdn = "your-domain.com"
-                
-                file_link = f"https://{fqdn}/files/{unique_file_id}"
-                
-                # Generate 3-hour temporary download link
-                expires_at = int(time.time()) + (3 * 60 * 60)  # 3 hours from now
-                signature = generate_download_signature(unique_file_id, expires_at, Var.DOWNLOAD_SECRET_KEY)
-                temp_download_link = f"https://{fqdn}/download/{unique_file_id}/{expires_at}/{signature}"
-                
-                # Format file details
-                size_str = format_file_size(file_size)
-                dc_str = f"DC {dc_id}" if dc_id else "Unknown DC"
-                mime_str = mime_type or "Unknown"
-                
-                reply_text = f"📁 **File Stored Successfully**\n\n"
-                reply_text += f"**Name:** {file_name}\n"
-                reply_text += f"**Size:** {size_str}\n"
-                reply_text += f"**Type:** {mime_str}\n"
-                reply_text += f"**Location:** {dc_str}\n\n"
-                
-                # Add note about R2 upload
-                if is_first_bot:
-                    reply_text += f"⏱️ Collecting all bot IDs... R2 upload in {R2_UPLOAD_DELAY}s\n\n"
-                
-                reply_text += f"📥 **Use the buttons below to access your file**"
-                
-                # Two buttons for new files: View File and 3 Hour Link
-                keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📥 View File", url=file_link)],
-                    [InlineKeyboardButton("⏱️ 3 Hour Link", url=temp_download_link)]
-                ])
-                
-                # Reply to the message
-                await message.reply_text(reply_text, reply_markup=keyboard)
+            file_link = f"https://{fqdn}/files/{unique_file_id}"
+            
+            # Generate 3-hour temporary download link
+            expires_at = int(time.time()) + (3 * 60 * 60)  # 3 hours from now
+            signature = generate_download_signature(unique_file_id, expires_at, Var.DOWNLOAD_SECRET_KEY)
+            temp_download_link = f"https://{fqdn}/download/{unique_file_id}/{expires_at}/{signature}"
+            
+            # Format file details
+            size_str = format_file_size(file_size)
+            
+            # Create caption/message text with file details
+            file_info = f"📁 **File Information**\n\n"
+            file_info += f"**Name:** `{file_name}`\n"
+            file_info += f"**Size:** `{size_str}`\n"
+            file_info += f"**File ID:** `{unique_file_id}`"
+            
+            # Create 3 buttons: Download (3-hour link), Refresh, View (permanent link)
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📥 Download", url=temp_download_link)],
+                [InlineKeyboardButton("🔄 Refresh Link", callback_data=f"refresh_{unique_file_id}")],
+                [InlineKeyboardButton("🌐 View on Network", url=file_link)]
+            ])
+            
+            # If forwarded, reply to message. Otherwise, edit caption
+            if is_forwarded:
+                # For forwarded files, reply to the message
+                await message.reply_text(file_info, reply_markup=keyboard)
+                logging.info(f"[Bot {bot_index + 1}] Replied to forwarded file: {unique_file_id}")
+            else:
+                # For non-forwarded files, edit the caption
+                try:
+                    # Preserve original caption if exists
+                    new_caption = f"{caption}\n\n{file_info}" if caption else file_info
+                    await message.edit_caption(caption=new_caption, reply_markup=keyboard)
+                    logging.info(f"[Bot {bot_index + 1}] Edited caption for file: {unique_file_id}")
+                except Exception as edit_error:
+                    # If edit fails (e.g., no caption to edit), reply instead
+                    logging.warning(f"[Bot {bot_index + 1}] Failed to edit caption, replying instead: {edit_error}")
+                    await message.reply_text(file_info, reply_markup=keyboard)
         
     except Exception as e:
         logging.error(f"[Bot {bot_index + 1}] Error storing media info: {e}", exc_info=True)
