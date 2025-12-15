@@ -15,7 +15,6 @@ from WebStreamer import StreamBot
 from WebStreamer.server import web_server
 from WebStreamer.bot.clients import initialize_clients
 from WebStreamer.utils import TokenParser
-from WebStreamer.database import get_database
 
 logging.basicConfig(
     level=logging.INFO,
