@@ -1,4 +1,4 @@
-# R2 Storage Integration Module
+# R2 Storage Integration Module with Bot User ID
 import requests
 import logging
 from typing import Optional, Dict
@@ -92,37 +92,33 @@ class R2Storage:
             logging.error(f"Unexpected error uploading to R2: {e}")
             return False
     
-    def format_file_data(self, unique_file_id: str, bot_file_ids: Dict[str, str],
-                        caption: str, file_size: int, file_type: str,
-                        message_id: int, channel_id: int, file_name: str,
-                        mime_type: str) -> Dict:
+    def format_file_data(self, unique_file_id: str, bot_user_id: int, file_id: str,
+                        file_name: str, file_size: int, mime_type: str,
+                        message_id: int, channel_id: int) -> Dict:
         """
-        Format file data according to R2 storage specification
+        Format file data for R2 storage with bot user ID as key
         
         Args:
             unique_file_id: Unique file identifier
-            bot_file_ids: Dictionary mapping bot IDs to file IDs (e.g., {"b_1_file_id": "BQA..."})
-            caption: File caption
+            bot_user_id: Telegram bot's user ID
+            file_id: Telegram file ID
+            file_name: Name of the file
             file_size: File size in bytes
-            file_type: Type of file (document, video, audio)
+            mime_type: MIME type
             message_id: Original message ID
             channel_id: Source channel ID
-            file_name: Name of the file
-            mime_type: MIME type
             
         Returns:
             Formatted dictionary ready for R2 upload
         """
         return {
             "unique_id": unique_file_id,
-            "bot_file_ids": bot_file_ids,
-            "caption": caption,
-            "file_size_bytes": file_size,
-            "file_type": file_type,
-            "original_message_id": message_id,
-            "source_channel_id": channel_id,
+            str(bot_user_id): file_id,  # Store as {bot_telegram_id: file_id}
             "file_name": file_name,
-            "mime_type": mime_type
+            "file_size_bytes": file_size,
+            "mime_type": mime_type,
+            "original_message_id": message_id,
+            "source_channel_id": channel_id
         }
 
 # Global R2 storage instance
