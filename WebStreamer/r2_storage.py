@@ -1,42 +1,42 @@
-# R2 Storage Integration Module with Bot User ID
+# R2 Storage Integration Module - Simplified for Direct Streaming
 import requests
 import logging
 from typing import Optional, Dict
 from .vars import Var
 
 class R2Storage:
-    """Handler for Cloudflare R2 storage operations"""
+    """Handler for Cloudflare R2 storage operations - metadata only"""
     
     def __init__(self):
         self.r2_domain = Var.R2_Domain
         self.r2_folder = Var.R2_Folder
         self.r2_public = Var.R2_Public
         
-    def check_file_exists(self, unique_file_id: str) -> Optional[Dict]:
+    def get_file_metadata(self, unique_file_id: str) -> Optional[Dict]:
         """
-        Check if file exists in R2 storage
+        Get file metadata from R2 storage
         
         Args:
             unique_file_id: Unique file identifier
             
         Returns:
-            Dict with file data if exists, None otherwise
+            Dict with file metadata if exists, None otherwise
         """
         try:
             # Build R2 public URL
             url = f"https://{self.r2_public}/{self.r2_folder}/{unique_file_id}.json"
             
-            # Make GET request to check existence
+            # Make GET request
             response = requests.get(url, timeout=10)
             
             if response.status_code == 200:
                 # File exists, parse and return JSON data
                 file_data = response.json()
-                logging.info(f"File found in R2: {unique_file_id}")
+                logging.info(f"File metadata found in R2: {unique_file_id}")
                 return file_data
             elif response.status_code == 404:
                 # File doesn't exist
-                logging.info(f"File not found in R2: {unique_file_id}")
+                logging.info(f"File metadata not found in R2: {unique_file_id}")
                 return None
             else:
                 logging.warning(f"Unexpected R2 status code {response.status_code} for {unique_file_id}")
@@ -52,7 +52,7 @@ class R2Storage:
             logging.error(f"Unexpected error checking R2: {e}")
             return None
     
-    def upload_file_data(self, unique_file_id: str, file_data: Dict) -> bool:
+    def upload_file_metadata(self, unique_file_id: str, file_data: Dict) -> bool:
         """
         Upload file metadata to R2 storage
         
@@ -76,7 +76,7 @@ class R2Storage:
             )
             
             if response.status_code == 200:
-                logging.info(f"Successfully uploaded to R2: {unique_file_id}")
+                logging.info(f"Successfully uploaded metadata to R2: {unique_file_id}")
                 return True
             else:
                 logging.error(f"Failed to upload to R2. Status: {response.status_code}, Response: {response.text}")
@@ -92,11 +92,11 @@ class R2Storage:
             logging.error(f"Unexpected error uploading to R2: {e}")
             return False
     
-    def format_file_data(self, unique_file_id: str, bot_user_id: int, file_id: str,
+    def format_file_metadata(self, unique_file_id: str, bot_user_id: int, file_id: str,
                         file_name: str, file_size: int, mime_type: str,
                         message_id: int, channel_id: int) -> Dict:
         """
-        Format file data for R2 storage with bot user ID as key
+        Format file metadata for R2 storage with bot user ID as key
         
         Args:
             unique_file_id: Unique file identifier
