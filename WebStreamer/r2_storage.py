@@ -191,7 +191,7 @@ class R2Storage:
             )
             
             if response.status_code == 200:
-                logging.info(f"Successfully uploaded metadata to R2: {unique_file_id}")
+                logging.debug(f"R2 upload success: {unique_file_id}")
                 # Cache the uploaded data immediately (mark as recently uploaded)
                 self._set_cache(unique_file_id, file_data, is_upload=True)
                 return True
