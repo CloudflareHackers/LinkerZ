@@ -122,6 +122,10 @@ async def initialize_clients():
             # Download session file from GitHub
             await download_from_github(session_file)
 
+            # Create a limited thread pool executor to prevent thread exhaustion
+            # Limit to 4 workers per client to avoid "can't start new thread" errors
+            executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix=f"bot_{client_id}_")
+            
             client = await Client(
                 name=session_name,
                 api_id=Var.API_ID,
@@ -129,7 +133,8 @@ async def initialize_clients():
                 bot_token=token,
                 sleep_threshold=Var.SLEEP_THRESHOLD,
                 no_updates=False,  # Changed to False to receive updates for media handling
-                in_memory=False
+                in_memory=False,
+                executor=executor  # Use limited thread pool
             ).start()
             work_loads[client_id] = 0
 
