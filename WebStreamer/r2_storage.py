@@ -1,18 +1,101 @@
 # R2 Storage Integration Module - Simplified for Direct Streaming
 import requests
 import logging
-from typing import Optional, Dict
+import time
+import threading
+from typing import Optional, Dict, Tuple
 from .vars import Var
 
 class R2Storage:
     """Handler for Cloudflare R2 storage operations - metadata only"""
     
+    # Cache TTL in seconds (5 minutes)
+    CACHE_TTL = 300
+    # Recently uploaded files TTL (60 seconds) - skip R2 check for recently uploaded
+    UPLOAD_TTL = 60
+    
     def __init__(self):
         self.r2_domain = Var.R2_Domain
         self.r2_folder = Var.R2_Folder
         self.r2_public = Var.R2_Public
+        # In-memory cache: {unique_file_id: (data, timestamp)}
+        self._cache: Dict[str, Tuple[Dict, float]] = {}
+        # Recently uploaded files: {unique_file_id: (data, timestamp)}
+        self._recently_uploaded: Dict[str, Tuple[Dict, float]] = {}
+        # Lock for thread-safe cache operations
+        self._cache_lock = threading.Lock()
         
-    def get_file_metadata(self, unique_file_id: str) -> Optional[Dict]:
+    def _get_from_cache(self, unique_file_id: str) -> Optional[Dict]:
+        """Get file metadata from cache if not expired"""
+        with self._cache_lock:
+            # Check recently uploaded first (higher priority)
+            if unique_file_id in self._recently_uploaded:
+                data, timestamp = self._recently_uploaded[unique_file_id]
+                if time.time() - timestamp < self.UPLOAD_TTL:
+                    logging.debug(f"Cache hit (recently uploaded): {unique_file_id}")
+                    return data
+                else:
+                    # Expired, remove it
+                    del self._recently_uploaded[unique_file_id]
+            
+            # Check regular cache
+            if unique_file_id in self._cache:
+                data, timestamp = self._cache[unique_file_id]
+                if time.time() - timestamp < self.CACHE_TTL:
+                    logging.debug(f"Cache hit: {unique_file_id}")
+                    return data
+                else:
+                    # Expired, remove it
+                    del self._cache[unique_file_id]
+        return None
+    
+    def _set_cache(self, unique_file_id: str, data: Dict, is_upload: bool = False):
+        """Set file metadata in cache"""
+        with self._cache_lock:
+            current_time = time.time()
+            self._cache[unique_file_id] = (data, current_time)
+            if is_upload:
+                self._recently_uploaded[unique_file_id] = (data, current_time)
+            
+            # Clean up old entries periodically (every 100 entries)
+            if len(self._cache) > 100:
+                self._cleanup_cache()
+    
+    def _cleanup_cache(self):
+        """Remove expired entries from cache"""
+        current_time = time.time()
+        # Clean main cache
+        expired_keys = [
+            k for k, (_, ts) in self._cache.items()
+            if current_time - ts > self.CACHE_TTL
+        ]
+        for k in expired_keys:
+            del self._cache[k]
+        
+        # Clean recently uploaded
+        expired_upload_keys = [
+            k for k, (_, ts) in self._recently_uploaded.items()
+            if current_time - ts > self.UPLOAD_TTL
+        ]
+        for k in expired_upload_keys:
+            del self._recently_uploaded[k]
+        
+        if expired_keys or expired_upload_keys:
+            logging.debug(f"Cache cleanup: removed {len(expired_keys)} cached, {len(expired_upload_keys)} recently uploaded")
+    
+    def is_recently_uploaded(self, unique_file_id: str) -> bool:
+        """Check if file was recently uploaded (skip redundant checks)"""
+        with self._cache_lock:
+            if unique_file_id in self._recently_uploaded:
+                _, timestamp = self._recently_uploaded[unique_file_id]
+                return time.time() - timestamp < self.UPLOAD_TTL
+        return False
+    
+    def get_cached_data(self, unique_file_id: str) -> Optional[Dict]:
+        """Get cached data without making R2 request"""
+        return self._get_from_cache(unique_file_id)
+        
+    def get_file_metadata(self, unique_file_id: str, use_cache: bool = True) -> Optional[Dict]:
         """
         Get file metadata from R2 storage
         
