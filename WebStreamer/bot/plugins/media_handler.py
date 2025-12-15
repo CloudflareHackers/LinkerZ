@@ -72,11 +72,23 @@ async def store_and_reply_to_media(client, message: Message):
             video_width = getattr(media, 'width', None)
             video_height = getattr(media, 'height', None)
         
-        # Store metadata in R2 only
+        # Store metadata in R2 with merge logic
         r2 = get_r2_storage()
         try:
+            # Get bot's Telegram user ID
+            bot_me = await client.get_me()
+            bot_user_id = bot_me.id
+            
+            # Fetch existing data from R2 first
+            existing_data = r2.get_file_metadata(unique_file_id)
+            
+            if existing_data:
+                logging.info(f"Found existing R2 data for {unique_file_id}, merging bot_file_ids")
+            
+            # Format with merge (keeps existing bot_file_ids and adds new one)
             r2_data = r2.format_file_metadata(
                 unique_file_id=unique_file_id,
+                bot_user_id=bot_user_id,
                 file_id=file_id,
                 file_name=file_name,
                 file_size=file_size,
@@ -87,11 +99,15 @@ async def store_and_reply_to_media(client, message: Message):
                 file_type=file_type,
                 video_duration=video_duration,
                 video_width=video_width,
-                video_height=video_height
+                video_height=video_height,
+                existing_data=existing_data
             )
             
+            # Upload merged data
             r2.upload_file_metadata(unique_file_id, r2_data)
-            logging.info(f"Uploaded to R2: {unique_file_id} - {file_type} - {file_name}")
+            
+            bot_count = len(r2_data.get("bot_file_ids", {}))
+            logging.info(f"Uploaded to R2: {unique_file_id} - {file_type} - Bot {bot_user_id} (Total bots: {bot_count})")
         except Exception as r2_error:
             logging.warning(f"Failed to upload to R2: {r2_error}")
         
