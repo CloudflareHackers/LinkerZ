@@ -143,9 +143,26 @@ async def store_and_reply_to_media(client, message: Message):
                 await message.edit_caption(caption=new_caption, reply_markup=keyboard)
                 logging.info(f"Edited caption for file: {unique_file_id}")
             except Exception as edit_error:
-                # If edit fails, reply instead
-                logging.warning(f"Failed to edit caption, replying instead: {edit_error}")
-                await message.reply_text(file_info, reply_markup=keyboard)
+                error_str = str(edit_error)
+                # Check if it's an admin required error
+                if "CHAT_ADMIN_REQUIRED" in error_str:
+                    logging.warning(f"Bot needs admin permissions: {edit_error}")
+                    try:
+                        await message.reply_text(
+                            "⚠️ **Admin Permissions Required**\n\n"
+                            "I need admin permissions to edit messages in this chat.\n\n"
+                            "Please make me an **Admin** with the following permissions:\n"
+                            "• ✏️ Edit messages\n"
+                            "• 📝 Post messages\n"
+                            "• 🗑️ Delete messages\n\n"
+                            "Once done, I'll be able to add download links directly to posts!"
+                        )
+                    except Exception as notify_error:
+                        logging.error(f"Failed to send admin notification: {notify_error}")
+                else:
+                    # If edit fails for other reasons, reply with file info instead
+                    logging.warning(f"Failed to edit caption, replying instead: {edit_error}")
+                    await message.reply_text(file_info, reply_markup=keyboard)
         
     except Exception as e:
         logging.error(f"Error storing media info: {e}", exc_info=True)
