@@ -59,9 +59,115 @@ routes = web.RouteTableDef()
 
 @routes.get("/", allow_head=True)
 async def root_route_handler(_):
-    return web.Response(
-            text='<html> <head> <title>LinkerX CDN</title> <style> body{ margin:0; padding:0; width:100%; height:100%; color:#b0bec5; display:table; font-weight:100; font-family:Lato } .container{ text-align:center; display:table-cell; vertical-align:middle } .content{ text-align:center; display:inline-block } .message{ font-size:80px; margin-bottom:40px } .submessage{ font-size:40px; margin-bottom:40px } .copyright{ font-size:20px; } a{ text-decoration:none; color:#3498db } </style> </head> <body> <div class="container"> <div class="content"> <div class="message">LinkerX CDN</div> <div class="submessage">All Systems Operational since '+utils.get_readable_time(time.time() - StartTime)+'</div> <div class="copyright">Hash Hackers and LiquidX Projects</div> </div> </div> </body> </html>', content_type="text/html"
-    )
+    # Pass the start timestamp to JavaScript for real-time updates
+    start_timestamp = int(StartTime * 1000)  # Convert to milliseconds for JS
+    
+    html_content = f'''<!DOCTYPE html>
+<html>
+<head>
+    <title>LinkerX CDN</title>
+    <style>
+        body {{
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            color: #b0bec5;
+            display: table;
+            font-weight: 100;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }}
+        .container {{
+            text-align: center;
+            display: table-cell;
+            vertical-align: middle;
+        }}
+        .content {{
+            text-align: center;
+            display: inline-block;
+        }}
+        .message {{
+            font-size: 72px;
+            margin-bottom: 30px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 600;
+        }}
+        .status {{
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }}
+        .status-dot {{
+            width: 12px;
+            height: 12px;
+            background: #4ade80;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }}
+        @keyframes pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.5; }}
+        }}
+        .submessage {{
+            font-size: 32px;
+            margin-bottom: 40px;
+            color: #94a3b8;
+        }}
+        .timer {{
+            font-family: 'Courier New', monospace;
+            color: #e2e8f0;
+            font-size: 36px;
+        }}
+        .copyright {{
+            font-size: 18px;
+            color: #64748b;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="content">
+            <div class="message">LinkerX CDN</div>
+            <div class="status">
+                <span class="status-dot"></span>
+                <span style="color: #4ade80; font-size: 24px;">All Systems Operational</span>
+            </div>
+            <div class="submessage">Uptime: <span id="uptime" class="timer">0d 0h 0m 0s</span></div>
+            <div class="copyright">Hash Hackers and LiquidX Projects</div>
+        </div>
+    </div>
+    
+    <script>
+        const startTime = {start_timestamp};
+        
+        function updateUptime() {{
+            const now = Date.now();
+            const diff = Math.floor((now - startTime) / 1000);
+            
+            const days = Math.floor(diff / 86400);
+            const hours = Math.floor((diff % 86400) / 3600);
+            const minutes = Math.floor((diff % 3600) / 60);
+            const seconds = diff % 60;
+            
+            let timeStr = '';
+            if (days > 0) timeStr += days + 'd ';
+            timeStr += hours + 'h ' + minutes + 'm ' + seconds + 's';
+            
+            document.getElementById('uptime').textContent = timeStr;
+        }}
+        
+        updateUptime();
+        setInterval(updateUptime, 1000);
+    </script>
+</body>
+</html>'''
+    
+    return web.Response(text=html_content, content_type="text/html")
 
 @routes.get("/favicon.ico", allow_head=True)
 async def favicon_handler(_):
