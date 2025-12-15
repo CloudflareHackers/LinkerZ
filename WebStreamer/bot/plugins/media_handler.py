@@ -77,6 +77,26 @@ async def mark_message_processed(chat_id: int, message_id: int, bot_id: int):
         key = (chat_id, message_id, bot_id)
         _processed_messages[key] = time.time()
 
+async def get_bot_user_id(client) -> int:
+    """Get bot user ID with caching to avoid repeated API calls"""
+    client_id = id(client)
+    
+    # Check cache first
+    if client_id in _bot_user_id_cache:
+        return _bot_user_id_cache[client_id]
+    
+    # Fetch from API and cache
+    try:
+        bot_me = await client.get_me()
+        bot_user_id = bot_me.id
+        _bot_user_id_cache[client_id] = bot_user_id
+        logging.info(f"Cached bot user ID: {bot_user_id}")
+        return bot_user_id
+    except Exception as e:
+        logging.error(f"Failed to get bot user ID: {e}")
+        # Return a fallback based on client id (not ideal but prevents crash)
+        return client_id
+
 async def store_and_reply_to_media(client, message: Message):
     """
     Store media file and reply with DL Link button
