@@ -111,13 +111,10 @@ class R2Storage:
         Returns:
             Formatted dictionary ready for R2 upload (compatible with old format)
         """
-        # Format: b_{bot_telegram_id}_file_id for compatibility
-        bot_key = f"b_{bot_user_id}_file_id"
-        
         return {
             "unique_id": unique_file_id,
             "bot_file_ids": {
-                bot_key: file_id
+                str(bot_user_id): file_id
             },
             "file_name": file_name,
             "file_size_bytes": file_size,
