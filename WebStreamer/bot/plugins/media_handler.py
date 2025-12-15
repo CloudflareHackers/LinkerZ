@@ -121,9 +121,8 @@ async def store_and_reply_to_media(client, message: Message):
         channel_id = message.chat.id if message.chat else None
         message_id = message.id
         
-        # Get bot's Telegram user ID early for deduplication check
-        bot_me = await client.get_me()
-        bot_user_id = bot_me.id
+        # Get bot's Telegram user ID (cached to avoid repeated API calls)
+        bot_user_id = await get_bot_user_id(client)
         
         # Check if this message was already processed by any bot (prevent duplicate processing)
         if await is_message_processed(channel_id, message_id, bot_user_id):
