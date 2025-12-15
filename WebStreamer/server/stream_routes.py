@@ -84,23 +84,29 @@ async def link_route_handler(request: web.Request):
         # Store metadata in R2 only
         r2 = get_r2_storage()
         try:
-            # Get bot's Telegram user ID
-            bot_me = await faster_client.get_me()
-            bot_user_id = bot_me.id
+            # Determine file type based on mime_type
+            file_type = None
+            if mime_type:
+                if mime_type.startswith('video/'):
+                    file_type = "video"
+                elif mime_type.startswith('audio/'):
+                    file_type = "audio"
+                else:
+                    file_type = "document"
             
             r2_data = r2.format_file_metadata(
                 unique_file_id=unique_file_id,
-                bot_user_id=bot_user_id,
                 file_id=telegram_file_id,
                 file_name=file_name,
                 file_size=file_size,
                 mime_type=mime_type,
                 message_id=int(message_id),
-                channel_id=int(channel_id)
+                channel_id=int(channel_id),
+                file_type=file_type
             )
             
             r2.upload_file_metadata(unique_file_id, r2_data)
-            logging.info(f"Uploaded metadata to R2: {unique_file_id} with bot_id {bot_user_id}")
+            logging.info(f"Uploaded metadata to R2: {unique_file_id} - {file_type}")
         except Exception as r2_error:
             logging.warning(f"Failed to upload to R2: {r2_error}")
         
