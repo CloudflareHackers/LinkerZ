@@ -2,7 +2,7 @@
 import logging
 from pyrogram import filters
 from WebStreamer.vars import Var
-from WebStreamer.bot import StreamBot
+from WebStreamer.bot import StreamBot, cached_bot_info
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 @StreamBot.on_message(filters.command(["start"]))
@@ -32,7 +32,8 @@ async def start(_, m: Message):
         reply_text += "2️⃣ Post files in the channel\n"
         reply_text += "3️⃣ I'll reply with a download link"
         
-        bot_username = (await StreamBot.get_me()).username
+        # Use cached bot username (populated at startup)
+        bot_username = cached_bot_info.get("username") or StreamBot.username
         
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("➕ Add Bot to Channel", 
@@ -48,7 +49,8 @@ async def start(_, m: Message):
 @StreamBot.on_message(filters.private & filters.text & ~filters.command(["start"]))
 async def handle_text_messages(_, m: Message):
     """Handle other text messages in private chat"""
-    bot_username = (await StreamBot.get_me()).username
+    # Use cached bot username (populated at startup)
+    bot_username = cached_bot_info.get("username") or StreamBot.username
     
     reply_text = "👋 Hello! I'm a file storage bot.\n\n"
     reply_text += "To get started, use /start to see your details and instructions.\n\n"
