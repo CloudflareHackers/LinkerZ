@@ -112,9 +112,12 @@ async def initialize_clients():
 
     async def start_client(client_id, token):
         try:
+            # Add staggered delay to prevent all clients from starting simultaneously
+            # This helps prevent thread exhaustion
+            await asyncio.sleep(client_id * 2)  # 2 seconds delay between each client
+            
             print(f"Starting - Client {client_id}")
             if client_id == len(all_tokens):
-                await asyncio.sleep(2)
                 print("This will take some time, please wait...")
             session_name = f"client_{client_id}_session"
             session_file = f"{session_name}.session"
