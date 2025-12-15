@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 from WebStreamer.r2_storage import get_r2_storage
 
-THREADPOOL = ThreadPoolExecutor(max_workers=1000)
+THREADPOOL = ThreadPoolExecutor(max_workers=300)
 
 
 def sanitize_header_value(value: str) -> str:

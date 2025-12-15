@@ -3,6 +3,7 @@
 from time import time
 import os
 import asyncio
+import logging
 from concurrent.futures import ThreadPoolExecutor
 
 # Configure limited thread pool executor to prevent thread exhaustion
@@ -12,11 +13,12 @@ from concurrent.futures import ThreadPoolExecutor
 max_workers = int(os.environ.get("MAX_THREAD_WORKERS", "10"))
 limited_executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="bot_pool_")
 
-# Get or create event loop and set the custom executor
-bot_loop = asyncio.get_event_loop()
+# Create new event loop (fixes deprecation warning for asyncio.get_event_loop())
+bot_loop = asyncio.new_event_loop()
+asyncio.set_event_loop(bot_loop)
 bot_loop.set_default_executor(limited_executor)
 
-print(f"[INFO] Configured thread pool with {max_workers} max workers")
+logging.info(f"Configured thread pool with {max_workers} max workers")
 
 # Import Var and StreamBot AFTER configuring the executor
 from .vars import Var
