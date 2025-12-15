@@ -92,29 +92,35 @@ class R2Storage:
             logging.error(f"Unexpected error uploading to R2: {e}")
             return False
     
-    def format_file_metadata(self, unique_file_id: str, bot_user_id: int, file_id: str,
+    def format_file_metadata(self, unique_file_id: str, file_id: str,
                         file_name: str, file_size: int, mime_type: str,
-                        message_id: int, channel_id: int) -> Dict:
+                        message_id: int, channel_id: int, caption: str = None,
+                        file_type: str = None, video_duration: int = None,
+                        video_width: int = None, video_height: int = None) -> Dict:
         """
-        Format file metadata for R2 storage with bot_file_ids structure (for compatibility)
+        Format file metadata for R2 storage with complete structure
         
         Args:
             unique_file_id: Unique file identifier
-            bot_user_id: Telegram bot's user ID
             file_id: Telegram file ID
             file_name: Name of the file
             file_size: File size in bytes
             mime_type: MIME type
             message_id: Original message ID
             channel_id: Source channel ID
+            caption: Message caption (optional)
+            file_type: Type of file - "video", "audio", or "document" (optional)
+            video_duration: Video duration in seconds (optional, for videos)
+            video_width: Video width in pixels (optional, for videos)
+            video_height: Video height in pixels (optional, for videos)
             
         Returns:
-            Formatted dictionary ready for R2 upload (compatible with old format)
+            Formatted dictionary ready for R2 upload
         """
-        return {
+        data = {
             "unique_id": unique_file_id,
             "bot_file_ids": {
-                str(bot_user_id): file_id
+                "b_1_file_id": file_id
             },
             "file_name": file_name,
             "file_size_bytes": file_size,
@@ -122,6 +128,23 @@ class R2Storage:
             "original_message_id": message_id,
             "source_channel_id": channel_id
         }
+        
+        # Add optional fields if provided
+        if caption:
+            data["caption"] = caption
+            
+        if file_type:
+            data["file_type"] = file_type
+            
+        # Add video-specific metadata if available
+        if video_duration is not None:
+            data["video_duration_seconds"] = video_duration
+        if video_width is not None:
+            data["video_width"] = video_width
+        if video_height is not None:
+            data["video_height"] = video_height
+            
+        return data
 
 # Global R2 storage instance
 r2_storage_instance = None
