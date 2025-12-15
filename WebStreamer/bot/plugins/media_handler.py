@@ -38,6 +38,41 @@ def format_file_size(bytes_size: int) -> str:
         i += 1
     return f"{size:.2f} {sizes[i]}"
 
+async def is_message_processed(chat_id: int, message_id: int, bot_id: int) -> bool:
+    """Check if message was already processed by any bot"""
+    async with _processed_lock:
+        current_time = time.time()
+        
+        # Cleanup old entries
+        expired_keys = [
+            k for k, ts in _processed_messages.items()
+            if current_time - ts > PROCESSED_TTL
+        ]
+        for k in expired_keys:
+            del _processed_messages[k]
+        
+        # Check if this specific message was processed by THIS bot
+        key = (chat_id, message_id, bot_id)
+        if key in _processed_messages:
+            return True
+        
+        # Check if any bot has processed this message recently (within lock TTL)
+        # This prevents duplicate processing by multiple bots
+        for (c_id, m_id, b_id), ts in _processed_messages.items():
+            if c_id == chat_id and m_id == message_id:
+                # Another bot processed it recently
+                if current_time - ts < PROCESS_LOCK_TTL:
+                    logging.debug(f"Message {message_id} in {chat_id} already being processed by bot {b_id}")
+                    return True
+        
+        return False
+
+async def mark_message_processed(chat_id: int, message_id: int, bot_id: int):
+    """Mark message as processed"""
+    async with _processed_lock:
+        key = (chat_id, message_id, bot_id)
+        _processed_messages[key] = time.time()
+
 async def store_and_reply_to_media(client, message: Message):
     """
     Store media file and reply with DL Link button
