@@ -97,6 +97,18 @@ async def store_and_reply_to_media(client, message: Message):
         channel_id = message.chat.id if message.chat else None
         message_id = message.id
         
+        # Get bot's Telegram user ID early for deduplication check
+        bot_me = await client.get_me()
+        bot_user_id = bot_me.id
+        
+        # Check if this message was already processed by any bot (prevent duplicate processing)
+        if await is_message_processed(channel_id, message_id, bot_user_id):
+            logging.debug(f"Skipping already processed message {message_id} in {channel_id} for bot {bot_user_id}")
+            return
+        
+        # Mark message as being processed immediately to prevent race conditions
+        await mark_message_processed(channel_id, message_id, bot_user_id)
+        
         # Get caption from message
         caption = message.caption or None
         
@@ -121,12 +133,16 @@ async def store_and_reply_to_media(client, message: Message):
         # Store metadata in R2 with merge logic
         r2 = get_r2_storage()
         try:
-            # Get bot's Telegram user ID
-            bot_me = await client.get_me()
-            bot_user_id = bot_me.id
-            
-            # Fetch existing data from R2 first
-            existing_data = r2.get_file_metadata(unique_file_id)
+            # First check if we have cached data (avoid R2 API call if recently uploaded)
+            existing_data = None
+            if r2.is_recently_uploaded(unique_file_id):
+                # Use cached data instead of making R2 request
+                existing_data = r2.get_cached_data(unique_file_id)
+                if existing_data:
+                    logging.debug(f"Using cached R2 data for {unique_file_id} (recently uploaded)")
+            else:
+                # Fetch from R2 with caching enabled
+                existing_data = r2.get_file_metadata(unique_file_id, use_cache=True)
             
             if existing_data:
                 logging.info(f"Found existing R2 data for {unique_file_id}, merging bot_file_ids")
@@ -149,7 +165,7 @@ async def store_and_reply_to_media(client, message: Message):
                 existing_data=existing_data
             )
             
-            # Upload merged data
+            # Upload merged data (this will also cache it)
             r2.upload_file_metadata(unique_file_id, r2_data)
             
             bot_count = len(r2_data.get("bot_file_ids", {}))
