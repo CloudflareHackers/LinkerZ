@@ -3,7 +3,6 @@ import logging
 import os
 import base64
 import requests
-from concurrent.futures import ThreadPoolExecutor
 from ..vars import Var
 from pyrogram import Client
 from WebStreamer.utils import TokenParser
