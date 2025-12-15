@@ -10,13 +10,13 @@ from aiohttp.http_exceptions import BadStatusLine
 from WebStreamer import bot_loop
 from functools import partial
 from WebStreamer.bot import multi_clients, work_loads
-from WebStreamer.server.exceptions import FIleNotFound, InvalidHash
+from WebStreamer.server.exceptions import FileNotFound, InvalidHash
 from WebStreamer import Var, utils, StartTime, __version__, StreamBot
 from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 from WebStreamer.r2_storage import get_r2_storage
 
-THREADPOOL = ThreadPoolExecutor(max_workers=300)
+THREADPOOL = ThreadPoolExecutor(max_workers=1000)
 
 
 def sanitize_header_value(value: str) -> str:
