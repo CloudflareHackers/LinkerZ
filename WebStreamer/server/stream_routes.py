@@ -329,6 +329,11 @@ async def direct_download(request: web.Request):
                 mime_type = "application/octet-stream"
                 file_name = f"{secrets.token_hex(2)}.unknown"
         
+        # Sanitize header values to prevent HTTP header injection
+        # This fixes: ValueError: Newline or carriage return character detected in HTTP status message or header
+        mime_type = sanitize_header_value(mime_type) if mime_type else "application/octet-stream"
+        file_name = sanitize_header_value(file_name) if file_name else "file"
+        
         if "video/" in mime_type or "audio/" in mime_type or "/html" in mime_type:
             disposition = "inline"
         
