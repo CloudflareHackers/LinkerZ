@@ -3,7 +3,7 @@ from typing import Any, Optional
 from pyrogram.types import Message
 from pyrogram.file_id import FileId
 from pyrogram.raw.types.messages import Messages
-from WebStreamer.server.exceptions import FIleNotFound
+from WebStreamer.server.exceptions import FileNotFound
 import logging
 
 
@@ -110,7 +110,7 @@ async def get_file_ids(client: Client, chat_id: int, message_id: int) -> Optiona
             raise
     
     if message.empty:
-        raise FIleNotFound
+        raise FileNotFound
     media = get_media_from_message(message)
     file_unique_id = await parse_file_unique_id(message)
     file_id = await parse_file_id(message)

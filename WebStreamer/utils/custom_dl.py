@@ -9,7 +9,7 @@ from .file_properties import get_file_ids
 from pyrogram.session import Session, Auth
 import inspect
 from pyrogram.errors import AuthBytesInvalid, FloodWait
-from WebStreamer.server.exceptions import FIleNotFound
+from WebStreamer.server.exceptions import FileNotFound
 from pyrogram.file_id import FileId, FileType, ThumbnailSource
 
 # Locks to prevent concurrent auth exports per DC (prevents FloodWait)
@@ -278,7 +278,7 @@ class ByteStreamer:
         logging.debug(f"Generated file ID and Unique ID for message with ID {message_id}")
         if not file_id:
             logging.debug(f"Message with ID {message_id} not found")
-            raise FIleNotFound
+            raise FileNotFound
         self.cached_file_ids[message_id] = file_id
         logging.debug(f"Cached media message with ID {message_id}")
         return self.cached_file_ids[message_id]
