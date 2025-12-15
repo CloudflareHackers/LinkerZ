@@ -1,10 +1,16 @@
 # R2 Storage Integration Module - Simplified for Direct Streaming
+# Using disk-based caching instead of in-memory (Heroku clears on restart)
 import requests
 import logging
 import time
 import threading
-from typing import Optional, Dict, Tuple
+import os
+import json
+from typing import Optional, Dict
 from .vars import Var
+
+# Disk cache directory (ephemeral on Heroku - cleared on restart)
+CACHE_DIR = "/tmp/r2_cache"
 
 class R2Storage:
     """Handler for Cloudflare R2 storage operations - metadata only"""
@@ -18,77 +24,94 @@ class R2Storage:
         self.r2_domain = Var.R2_Domain
         self.r2_folder = Var.R2_Folder
         self.r2_public = Var.R2_Public
-        # In-memory cache: {unique_file_id: (data, timestamp)}
-        self._cache: Dict[str, Tuple[Dict, float]] = {}
-        # Recently uploaded files: {unique_file_id: (data, timestamp)}
-        self._recently_uploaded: Dict[str, Tuple[Dict, float]] = {}
         # Lock for thread-safe cache operations
         self._cache_lock = threading.Lock()
+        # Ensure cache directory exists
+        self._ensure_cache_dir()
+        
+    def _ensure_cache_dir(self):
+        """Ensure cache directory exists"""
+        try:
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            os.makedirs(os.path.join(CACHE_DIR, "recent"), exist_ok=True)
+            logging.info(f"Disk cache directory ready: {CACHE_DIR}")
+        except Exception as e:
+            logging.error(f"Failed to create cache directory: {e}")
+    
+    def _get_cache_path(self, unique_file_id: str, recent: bool = False) -> str:
+        """Get the file path for a cached file"""
+        subdir = "recent" if recent else ""
+        return os.path.join(CACHE_DIR, subdir, f"{unique_file_id}.json")
+    
+    def _read_cache_file(self, filepath: str, ttl: int) -> Optional[Dict]:
+        """Read and validate cache file"""
+        try:
+            if not os.path.exists(filepath):
+                return None
+            
+            # Check if file is expired based on modification time
+            file_mtime = os.path.getmtime(filepath)
+            if time.time() - file_mtime > ttl:
+                # Expired, remove it
+                try:
+                    os.remove(filepath)
+                except:
+                    pass
+                return None
+            
+            # Read and parse JSON
+            with open(filepath, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logging.debug(f"Error reading cache file {filepath}: {e}")
+            return None
+    
+    def _write_cache_file(self, filepath: str, data: Dict):
+        """Write data to cache file"""
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f)
+        except Exception as e:
+            logging.debug(f"Error writing cache file {filepath}: {e}")
         
     def _get_from_cache(self, unique_file_id: str) -> Optional[Dict]:
-        """Get file metadata from cache if not expired"""
+        """Get file metadata from disk cache if not expired"""
         with self._cache_lock:
             # Check recently uploaded first (higher priority)
-            if unique_file_id in self._recently_uploaded:
-                data, timestamp = self._recently_uploaded[unique_file_id]
-                if time.time() - timestamp < self.UPLOAD_TTL:
-                    logging.debug(f"Cache hit (recently uploaded): {unique_file_id}")
-                    return data
-                else:
-                    # Expired, remove it
-                    del self._recently_uploaded[unique_file_id]
+            recent_path = self._get_cache_path(unique_file_id, recent=True)
+            data = self._read_cache_file(recent_path, self.UPLOAD_TTL)
+            if data:
+                logging.debug(f"Disk cache hit (recently uploaded): {unique_file_id}")
+                return data
             
             # Check regular cache
-            if unique_file_id in self._cache:
-                data, timestamp = self._cache[unique_file_id]
-                if time.time() - timestamp < self.CACHE_TTL:
-                    logging.debug(f"Cache hit: {unique_file_id}")
-                    return data
-                else:
-                    # Expired, remove it
-                    del self._cache[unique_file_id]
+            cache_path = self._get_cache_path(unique_file_id, recent=False)
+            data = self._read_cache_file(cache_path, self.CACHE_TTL)
+            if data:
+                logging.debug(f"Disk cache hit: {unique_file_id}")
+                return data
+        
         return None
     
     def _set_cache(self, unique_file_id: str, data: Dict, is_upload: bool = False):
-        """Set file metadata in cache"""
+        """Set file metadata in disk cache"""
         with self._cache_lock:
-            current_time = time.time()
-            self._cache[unique_file_id] = (data, current_time)
-            if is_upload:
-                self._recently_uploaded[unique_file_id] = (data, current_time)
+            # Write to main cache
+            cache_path = self._get_cache_path(unique_file_id, recent=False)
+            self._write_cache_file(cache_path, data)
             
-            # Clean up old entries periodically (every 100 entries)
-            if len(self._cache) > 100:
-                self._cleanup_cache()
-    
-    def _cleanup_cache(self):
-        """Remove expired entries from cache"""
-        current_time = time.time()
-        # Clean main cache
-        expired_keys = [
-            k for k, (_, ts) in self._cache.items()
-            if current_time - ts > self.CACHE_TTL
-        ]
-        for k in expired_keys:
-            del self._cache[k]
-        
-        # Clean recently uploaded
-        expired_upload_keys = [
-            k for k, (_, ts) in self._recently_uploaded.items()
-            if current_time - ts > self.UPLOAD_TTL
-        ]
-        for k in expired_upload_keys:
-            del self._recently_uploaded[k]
-        
-        if expired_keys or expired_upload_keys:
-            logging.debug(f"Cache cleanup: removed {len(expired_keys)} cached, {len(expired_upload_keys)} recently uploaded")
+            # Also write to recent cache if upload
+            if is_upload:
+                recent_path = self._get_cache_path(unique_file_id, recent=True)
+                self._write_cache_file(recent_path, data)
     
     def is_recently_uploaded(self, unique_file_id: str) -> bool:
         """Check if file was recently uploaded (skip redundant checks)"""
         with self._cache_lock:
-            if unique_file_id in self._recently_uploaded:
-                _, timestamp = self._recently_uploaded[unique_file_id]
-                return time.time() - timestamp < self.UPLOAD_TTL
+            recent_path = self._get_cache_path(unique_file_id, recent=True)
+            if os.path.exists(recent_path):
+                file_mtime = os.path.getmtime(recent_path)
+                return time.time() - file_mtime < self.UPLOAD_TTL
         return False
     
     def get_cached_data(self, unique_file_id: str) -> Optional[Dict]:
