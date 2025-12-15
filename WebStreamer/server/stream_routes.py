@@ -1,7 +1,5 @@
 # Simplified streaming routes - no database, no auth
 import re
-import os
-import json
 import time
 import math
 import logging
