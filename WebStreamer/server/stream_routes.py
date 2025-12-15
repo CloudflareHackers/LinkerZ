@@ -18,6 +18,22 @@ from WebStreamer.r2_storage import get_r2_storage
 
 THREADPOOL = ThreadPoolExecutor(max_workers=1000)
 
+
+def sanitize_header_value(value: str) -> str:
+    """
+    Sanitize a string for use in HTTP headers.
+    Removes or replaces newline and carriage return characters
+    to prevent HTTP header injection attacks.
+    """
+    if not value:
+        return value
+    # Remove carriage return and newline characters
+    sanitized = value.replace('\r', '').replace('\n', ' ')
+    # Also remove any null bytes
+    sanitized = sanitized.replace('\x00', '')
+    # Strip leading/trailing whitespace
+    return sanitized.strip()
+
 async def sync_to_async(func, *args, wait=True, **kwargs):
     pfunc = partial(func, *args, **kwargs)
     future = bot_loop.run_in_executor(THREADPOOL, pfunc)
