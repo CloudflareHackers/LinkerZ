@@ -112,34 +112,27 @@ async def store_and_reply_to_media(client, message: Message):
             logging.warning(f"Failed to upload to R2: {r2_error}")
         
         # Generate download link
-        # Check if message already has a "DL Link" button (added by another bot instance)
-        has_dl_button = False
-        if message.reply_markup and hasattr(message.reply_markup, 'inline_keyboard'):
-            for row in message.reply_markup.inline_keyboard:
-                for button in row:
-                    if button.text == "DL Link":
-                        has_dl_button = True
-                        break
-                if has_dl_button:
-                    break
-        
-        if has_dl_button:
-            # Another bot already added the DL Link button, skip adding button
-            logging.info(f"DL Link button already exists for {unique_file_id}, skipping button addition (metadata stored in R2)")
-            return
-        
         fqdn = Var.FQDN
         if not fqdn:
             fqdn = "your-domain.com"
         
         download_url = f"https://{fqdn}/dl/{unique_file_id}/{file_id}"
         
-        # Create single button with "DL Link"
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("DL Link", url=download_url)]
-        ])
+        # Check if message already has buttons (from other bot instances)
+        existing_buttons = []
+        if message.reply_markup and hasattr(message.reply_markup, 'inline_keyboard'):
+            # Preserve all existing buttons
+            for row in message.reply_markup.inline_keyboard:
+                existing_buttons.append(row)
         
-        # Format file details
+        # Add new DL Link button as a new row
+        new_button_row = [InlineKeyboardButton("DL Link", url=download_url)]
+        existing_buttons.append(new_button_row)
+        
+        # Create keyboard with all buttons (existing + new)
+        keyboard = InlineKeyboardMarkup(existing_buttons)
+        
+        # Format file details (only add if no existing buttons, meaning first bot)
         size_str = format_file_size(file_size)
         file_info = f"📁 **{file_name}**\n"
         file_info += f"📊 Size: `{size_str}`"
@@ -153,11 +146,16 @@ async def store_and_reply_to_media(client, message: Message):
             logging.info(f"Replied to forwarded file: {unique_file_id}")
         else:
             try:
-                # Preserve original caption if exists
+                # Preserve original caption - don't add file_info again if buttons already exist
                 caption = message.caption or ""
-                new_caption = f"{caption}\n\n{file_info}" if caption else file_info
+                if len(existing_buttons) == 1:
+                    # First bot - add file info to caption
+                    new_caption = f"{caption}\n\n{file_info}" if caption else file_info
+                else:
+                    # Other bots - keep caption as is, just add button
+                    new_caption = caption
                 await message.edit_caption(caption=new_caption, reply_markup=keyboard)
-                logging.info(f"Edited caption for file: {unique_file_id}")
+                logging.info(f"Edited caption for file: {unique_file_id} (total buttons: {len(existing_buttons)})")
             except Exception as edit_error:
                 error_str = str(edit_error)
                 # Check if it's an admin required error
