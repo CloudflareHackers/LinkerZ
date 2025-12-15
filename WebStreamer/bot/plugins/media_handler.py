@@ -25,6 +25,10 @@ PROCESSED_TTL = 300
 # Lock timeout to prevent multiple bots processing same message
 PROCESS_LOCK_TTL = 30
 
+# Cache for bot user IDs to avoid repeated get_me() calls
+# Format: {client_id: bot_user_id}
+_bot_user_id_cache = {}
+
 def format_file_size(bytes_size: int) -> str:
     """Format file size in human readable format"""
     if bytes_size == 0:
