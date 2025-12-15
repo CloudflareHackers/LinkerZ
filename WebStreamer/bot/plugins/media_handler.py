@@ -78,19 +78,23 @@ async def mark_message_processed(chat_id: int, message_id: int, bot_id: int):
         _processed_messages[key] = time.time()
 
 async def get_bot_user_id(client) -> int:
-    """Get bot user ID with caching to avoid repeated API calls"""
+    """Get bot user ID - uses ENV variable first, then falls back to API with caching"""
+    # Use BOT_ID from environment if set
+    if Var.BOT_ID:
+        return Var.BOT_ID
+    
     client_id = id(client)
     
     # Check cache first
     if client_id in _bot_user_id_cache:
         return _bot_user_id_cache[client_id]
     
-    # Fetch from API and cache
+    # Fetch from API and cache (fallback)
     try:
         bot_me = await client.get_me()
         bot_user_id = bot_me.id
         _bot_user_id_cache[client_id] = bot_user_id
-        logging.info(f"Cached bot user ID: {bot_user_id}")
+        logging.info(f"Cached bot user ID from API: {bot_user_id}")
         return bot_user_id
     except Exception as e:
         logging.error(f"Failed to get bot user ID: {e}")
