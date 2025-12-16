@@ -1,5 +1,5 @@
 aiohttp
-kurigram
+pyrotgfork
 python-dotenv
 tgcrypto
 pycryptodome
