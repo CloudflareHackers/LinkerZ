@@ -201,6 +201,29 @@ def get_error_page(error_title, error_message):
 </html>'''
     return html_content
 
+async def safe_yield_file(generator):
+    """
+    Wrapper for yield_file that catches exceptions during streaming.
+    If an error occurs during streaming, we can't send an HTML error page
+    because headers were already sent, but we can at least log it and stop gracefully.
+    """
+    try:
+        async for chunk in generator:
+            yield chunk
+    except Exception as e:
+        error_str = str(e)
+        logging.error(f"Error during file streaming: {error_str}", exc_info=True)
+        
+        # Log the specific error type for monitoring
+        if "FILE_REFERENCE" in error_str and "EXPIRED" in error_str:
+            logging.error("FILE_REFERENCE_EXPIRED during streaming - connection already established")
+        elif "FLOOD_WAIT" in error_str:
+            logging.error("FLOOD_WAIT during streaming - rate limited")
+        
+        # Can't send error page here as headers already sent
+        # Connection will be closed and client will see incomplete download
+        raise
+
 @routes.get("/dl/{unique_file_id}/{file_id}/{size}/{filename}", allow_head=True)
 async def direct_download(request: web.Request):
     """Stream file directly using file_id - metadata from URL path"""
