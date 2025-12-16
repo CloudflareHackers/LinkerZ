@@ -1,4 +1,4 @@
-# Simplified streaming routes - no database, no auth
+# Simplified streaming routes - no database, no auth, no R2
 import re
 import time
 import math
@@ -14,7 +14,6 @@ from WebStreamer.server.exceptions import FileNotFound, InvalidHash
 from WebStreamer import Var, utils, StartTime, __version__, StreamBot
 from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
-from WebStreamer.r2_storage import get_r2_storage
 
 THREADPOOL = ThreadPoolExecutor(max_workers=1000)
 
@@ -104,7 +103,7 @@ async def favicon_handler(_):
 # Public API to generate download link from channel/message
 @routes.get("/link/{path:.*}", allow_head=True)
 async def link_route_handler(request: web.Request):
-    """Generate download link for a file from channel_id/message_id - No auth, no expiry, no database"""
+    """Generate download link for a file from channel_id/message_id - No auth, no expiry"""
     try:
         # eg. path is /link/channelid/messageid
         parts = request.match_info['path'].split("/")
@@ -141,54 +140,10 @@ async def link_route_handler(request: web.Request):
         file_size = file_id.file_size
         mime_type = file_id.mime_type
         
-        # Store metadata in R2 with merge logic
-        r2 = get_r2_storage()
-        try:
-            # Get bot's Telegram user ID
-            bot_me = await faster_client.get_me()
-            bot_user_id = bot_me.id
-            
-            # Determine file type based on mime_type
-            file_type = None
-            if mime_type:
-                if mime_type.startswith('video/'):
-                    file_type = "video"
-                elif mime_type.startswith('audio/'):
-                    file_type = "audio"
-                else:
-                    file_type = "document"
-            
-            # Fetch existing data from R2 first
-            existing_data = r2.get_file_metadata(unique_file_id)
-            
-            if existing_data:
-                logging.info(f"Found existing R2 data for {unique_file_id}, merging bot_file_ids")
-            
-            # Format with merge
-            r2_data = r2.format_file_metadata(
-                unique_file_id=unique_file_id,
-                bot_user_id=bot_user_id,
-                file_id=telegram_file_id,
-                file_name=file_name,
-                file_size=file_size,
-                mime_type=mime_type,
-                message_id=int(message_id),
-                channel_id=int(channel_id),
-                file_type=file_type,
-                existing_data=existing_data
-            )
-            
-            # Upload merged data
-            r2.upload_file_metadata(unique_file_id, r2_data)
-            
-            bot_count = len(r2_data.get("bot_file_ids", {}))
-            logging.info(f"Uploaded metadata to R2: {unique_file_id} - Bot {bot_user_id} (Total bots: {bot_count})")
-        except Exception as r2_error:
-            logging.warning(f"Failed to upload to R2: {r2_error}")
-        
-        # Build permanent download URL
+        # Build permanent download URL with new format
         fqdn = Var.FQDN
-        download_url = f"https://{fqdn}/dl/{unique_file_id}/{telegram_file_id}"
+        safe_filename = urllib.parse.quote(file_name or 'file', safe='')
+        download_url = f"https://{fqdn}/dl/{unique_file_id}/{telegram_file_id}/{file_size}/{safe_filename}"
         
         return web.json_response({
             'success': True,
@@ -217,14 +172,20 @@ async def link_route_handler(request: web.Request):
             'message': error_message
         }, status=500)
 
-@routes.get("/dl/{unique_file_id}/{file_id}", allow_head=True)
+@routes.get("/dl/{unique_file_id}/{file_id}/{size}/{filename}", allow_head=True)
 async def direct_download(request: web.Request):
-    """Stream file directly using file_id - no database, metadata from R2 with disk caching"""
+    """Stream file directly using file_id - metadata from URL path"""
     try:
         unique_file_id = request.match_info['unique_file_id']
         file_id = request.match_info['file_id']
+        size_str = request.match_info['size']
+        filename_encoded = request.match_info['filename']
         
-        logging.debug(f"Download request: {unique_file_id}")
+        # Decode filename from URL encoding
+        file_name = urllib.parse.unquote(filename_encoded)
+        file_size = int(size_str) if size_str.isdigit() else 0
+        
+        logging.debug(f"Download request: {unique_file_id} - {file_name}")
         
         # Get a client to stream with
         index = min(work_loads, key=work_loads.get)
@@ -240,29 +201,15 @@ async def direct_download(request: web.Request):
         from pyrogram.file_id import FileId
         file_id_obj = FileId.decode(file_id)
         
-        # Get metadata from R2 (already has disk caching built-in)
-        r2 = get_r2_storage()
-        r2_metadata = r2.get_file_metadata(unique_file_id)
+        # Use metadata from URL path
+        setattr(file_id_obj, "file_size", file_size)
+        setattr(file_id_obj, "file_name", file_name)
         
-        if r2_metadata:
-            # Use metadata from R2 cache
-            file_size = r2_metadata.get('file_size_bytes', 0)
-            mime_type = r2_metadata.get('mime_type', 'application/octet-stream')
-            file_name = r2_metadata.get('file_name', 'file')
-            
-            setattr(file_id_obj, "file_size", file_size)
-            setattr(file_id_obj, "mime_type", mime_type)
-            setattr(file_id_obj, "file_name", file_name)
-            
-            logging.debug(f"Using cached metadata: {file_name} ({file_size} bytes)")
-        else:
-            # No R2 metadata, use defaults
-            logging.debug(f"No R2 metadata for {unique_file_id}")
-            setattr(file_id_obj, "file_size", 0)
-            setattr(file_id_obj, "mime_type", "application/octet-stream")
-            setattr(file_id_obj, "file_name", "file")
+        # Guess mime type from filename
+        mime_type = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+        setattr(file_id_obj, "mime_type", mime_type)
         
-        file_size = file_id_obj.file_size
+        logging.debug(f"Using URL metadata: {file_name} ({file_size} bytes)")
         
         # If file_size is 0, we need to get it from Telegram
         if file_size == 0:
@@ -274,8 +221,10 @@ async def direct_download(request: web.Request):
                     setattr(file_id_obj, "file_size", file_size)
                     if hasattr(media, 'file_name') and media.file_name:
                         setattr(file_id_obj, "file_name", media.file_name)
+                        file_name = media.file_name
                     if hasattr(media, 'mime_type') and media.mime_type:
                         setattr(file_id_obj, "mime_type", media.mime_type)
+                        mime_type = media.mime_type
             except Exception as tg_error:
                 logging.warning(f"Failed to get file info from Telegram: {tg_error}")
                 file_size = 1024 * 1024 * 1024  # 1GB default
@@ -312,25 +261,9 @@ async def direct_download(request: web.Request):
             file_id_obj, index, offset, first_part_cut, last_part_cut, part_count, chunk_size
         )
         
-        mime_type = file_id_obj.mime_type
-        file_name = file_id_obj.file_name
         disposition = "attachment"
         
-        if mime_type:
-            if not file_name:
-                try:
-                    file_name = f"{secrets.token_hex(2)}.{mime_type.split('/')[1]}"
-                except (IndexError, AttributeError):
-                    file_name = f"{secrets.token_hex(2)}.unknown"
-        else:
-            if file_name:
-                mime_type = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
-            else:
-                mime_type = "application/octet-stream"
-                file_name = f"{secrets.token_hex(2)}.unknown"
-        
         # Sanitize header values to prevent HTTP header injection
-        # This fixes: ValueError: Newline or carriage return character detected in HTTP status message or header
         mime_type = sanitize_header_value(mime_type) if mime_type else "application/octet-stream"
         file_name = sanitize_header_value(file_name) if file_name else "file"
         
