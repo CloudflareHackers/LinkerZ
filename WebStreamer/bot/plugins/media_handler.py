@@ -1,10 +1,10 @@
-# Simplified media handler - single "DL Link" button - No database, R2 only
+# Simplified media handler - single "DL Link" button - No R2, local tracking only
 import logging
 import time
 import asyncio
+import urllib.parse
 from pyrogram import filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from WebStreamer.r2_storage import get_r2_storage
 from WebStreamer.bot import StreamBot
 from WebStreamer.vars import Var
 from pyrogram.file_id import FileId
@@ -146,6 +146,11 @@ async def store_and_reply_to_media(client, message: Message):
         message: Message containing media
     """
     try:
+        # Check if sending links to channels is enabled
+        if not Var.SEND_LINKS_TO_CHANNELS:
+            logging.debug(f"Skipping link reply - SEND_LINKS_TO_CHANNELS is disabled")
+            return
+        
         # Get media information
         media = message.video or message.audio or message.document
         if not media:
@@ -155,7 +160,6 @@ async def store_and_reply_to_media(client, message: Message):
         file_id = media.file_id
         file_name = getattr(media, 'file_name', None) or f"file_{unique_file_id}"
         file_size = getattr(media, 'file_size', 0)
-        mime_type = getattr(media, 'mime_type', None)
         
         # Get channel ID and message ID
         channel_id = message.chat.id if message.chat else None
@@ -172,9 +176,6 @@ async def store_and_reply_to_media(client, message: Message):
         # Mark message as being processed immediately to prevent race conditions
         await mark_message_processed(channel_id, message_id, bot_user_id)
         
-        # Get caption from message
-        caption = message.caption or None
-        
         # Determine file type
         file_type = None
         if message.video:
@@ -184,64 +185,16 @@ async def store_and_reply_to_media(client, message: Message):
         elif message.document:
             file_type = "document"
         
-        # Extract video-specific metadata if it's a video
-        video_duration = None
-        video_width = None
-        video_height = None
-        if message.video:
-            video_duration = getattr(media, 'duration', None)
-            video_width = getattr(media, 'width', None)
-            video_height = getattr(media, 'height', None)
+        logging.info(f"Processing {file_type}: {unique_file_id} - Bot {bot_user_id}")
         
-        # Store metadata in R2 with merge logic
-        r2 = get_r2_storage()
-        try:
-            # First check if we have cached data (avoid R2 API call if recently uploaded)
-            existing_data = None
-            if r2.is_recently_uploaded(unique_file_id):
-                # Use cached data instead of making R2 request
-                existing_data = r2.get_cached_data(unique_file_id)
-                if existing_data:
-                    logging.debug(f"Using cached R2 data for {unique_file_id} (recently uploaded)")
-            else:
-                # Fetch from R2 with caching enabled
-                existing_data = r2.get_file_metadata(unique_file_id, use_cache=True)
-            
-            if existing_data:
-                logging.info(f"Found existing R2 data for {unique_file_id}, merging bot_file_ids")
-            
-            # Format with merge (keeps existing bot_file_ids and adds new one)
-            r2_data = r2.format_file_metadata(
-                unique_file_id=unique_file_id,
-                bot_user_id=bot_user_id,
-                file_id=file_id,
-                file_name=file_name,
-                file_size=file_size,
-                mime_type=mime_type,
-                message_id=message_id,
-                channel_id=channel_id,
-                caption=caption,
-                file_type=file_type,
-                video_duration=video_duration,
-                video_width=video_width,
-                video_height=video_height,
-                existing_data=existing_data
-            )
-            
-            # Upload merged data (this will also cache it)
-            r2.upload_file_metadata(unique_file_id, r2_data)
-            
-            bot_count = len(r2_data.get("bot_file_ids", {}))
-            logging.info(f"Uploaded to R2: {unique_file_id} - {file_type} - Bot {bot_user_id} (Total bots: {bot_count})")
-        except Exception as r2_error:
-            logging.warning(f"Failed to upload to R2: {r2_error}")
-        
-        # Generate download link
+        # Generate download link with new format: /dl/unique_file_id/file_id/size/filename
         fqdn = Var.FQDN
         if not fqdn:
             fqdn = "your-domain.com"
         
-        download_url = f"https://{fqdn}/dl/{unique_file_id}/{file_id}"
+        # URL encode the filename for safe URL usage
+        safe_filename = urllib.parse.quote(file_name, safe='')
+        download_url = f"https://{fqdn}/dl/{unique_file_id}/{file_id}/{file_size}/{safe_filename}"
         
         # Check if message already has buttons (from other bot instances)
         existing_buttons = []
