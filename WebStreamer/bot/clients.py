@@ -7,6 +7,9 @@ from . import multi_clients, work_loads, StreamBot
 
 parser = TokenParser()
 
+# Base session name from BOT_ID
+base_session_name = str(Var.BOT_ID) if Var.BOT_ID else "WebStreamer"
+
 async def initialize_clients():
     multi_clients[0] = StreamBot
     work_loads[0] = 0
@@ -24,7 +27,8 @@ async def initialize_clients():
             logging.info(f"Starting - Client {client_id}")
             if client_id == len(all_tokens):
                 logging.info("This will take some time, please wait...")
-            session_name = f"client_{client_id}_session"
+            # Session name includes base bot_id for unique identification per server
+            session_name = f"{base_session_name}_client_{client_id}"
             session_file = f"{session_name}.session"
 
             # Download session file from GitHub
