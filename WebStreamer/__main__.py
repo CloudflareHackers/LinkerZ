@@ -14,6 +14,7 @@ from WebStreamer.server import web_server
 from WebStreamer.bot.clients import initialize_clients
 from WebStreamer.bot import cached_bot_info
 from WebStreamer.utils import upload_to_github, download_from_github
+from WebStreamer.bot import session_name as bot_session_name
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,8 +30,8 @@ logging.getLogger("pyrogram").setLevel(logging.ERROR)
 
 server = web.AppRunner(web_server())
 
-session_name = "WebStreamer"
-session_file = f"{session_name}.session"
+# Session file named based on BOT_ID from env (e.g., "123456789.session")
+session_file = f"{bot_session_name}.session"
 
 async def start_services():
     try:
