@@ -33,6 +33,18 @@ server = web.AppRunner(web_server())
 # Session file named based on BOT_ID from env (e.g., "123456789.session")
 session_file = f"{bot_session_name}.session"
 
+# Helper function to log and flush immediately (ensures logs appear on Heroku)
+def log_flush(message, level="info"):
+    """Log a message and flush stdout immediately for Heroku visibility"""
+    if level == "error":
+        logging.error(message)
+    elif level == "warning":
+        logging.warning(message)
+    else:
+        logging.info(message)
+    sys.stdout.flush()
+    sys.stderr.flush()
+
 async def start_services():
     try:
         # Download session file from GitHub before starting the bot
