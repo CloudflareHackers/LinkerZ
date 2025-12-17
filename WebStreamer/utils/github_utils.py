@@ -21,34 +21,62 @@ async def upload_to_github(file_path: str, repo_path: str) -> bool:
     Upload a file to GitHub repository using async HTTP.
     
     Args:
-        file_path: Local path to the file to upload
-        repo_path: Path in the GitHub repository
+        file_path: Local path to the file to upload (can be filename or full path)
+        repo_path: Path in the GitHub repository (just filename)
         
     Returns:
         True if successful, False otherwise
     """
+    import sys
+    
+    def _log(msg, level="info"):
+        """Log and flush immediately"""
+        if level == "error":
+            logging.error(msg)
+        elif level == "warning":
+            logging.warning(msg)
+        else:
+            logging.info(msg)
+        sys.stdout.flush()
+    
     try:
-        logging.info(f"[GitHub Upload] Starting upload process...")
-        logging.info(f"[GitHub Upload] Local file path: {file_path}")
-        logging.info(f"[GitHub Upload] GitHub repo path: {repo_path}")
+        _log(f"[GitHub Upload] Starting upload process...")
+        _log(f"[GitHub Upload] Local file path: {file_path}")
+        _log(f"[GitHub Upload] GitHub repo path: {repo_path}")
+        _log(f"[GitHub Upload] Current working directory: {os.getcwd()}")
         
-        if not os.path.exists(file_path):
-            logging.warning(f"[GitHub Upload] ✗ File {file_path} does not exist, skipping upload")
+        # Handle both filename and full path
+        if not os.path.isabs(file_path):
+            full_path = os.path.join(os.getcwd(), file_path)
+            _log(f"[GitHub Upload] Resolved to full path: {full_path}")
+        else:
+            full_path = file_path
+        
+        if not os.path.exists(full_path):
+            _log(f"[GitHub Upload] ✗ File {full_path} does not exist, skipping upload", "warning")
+            # List files in directory for debugging
+            _log(f"[GitHub Upload] Files in {os.path.dirname(full_path) or os.getcwd()}:")
+            try:
+                for f in os.listdir(os.path.dirname(full_path) or os.getcwd()):
+                    if 'session' in f.lower() or f.endswith('.session'):
+                        _log(f"[GitHub Upload]   - {f}")
+            except Exception as list_err:
+                _log(f"[GitHub Upload]   Could not list directory: {list_err}")
             return False
         
-        file_size = os.path.getsize(file_path)
-        logging.info(f"[GitHub Upload] File size: {file_size} bytes")
+        file_size = os.path.getsize(full_path)
+        _log(f"[GitHub Upload] File size: {file_size} bytes")
         
         if not GITHUB_TOKEN or not GITHUB_USERNAME or not GITHUB_REPO:
-            logging.warning(f"[GitHub Upload] ✗ GitHub credentials not configured:")
-            logging.warning(f"[GitHub Upload]   - GITHUB_TOKEN: {'SET' if GITHUB_TOKEN else 'NOT SET'}")
-            logging.warning(f"[GitHub Upload]   - GITHUB_USERNAME: {GITHUB_USERNAME if GITHUB_USERNAME else 'NOT SET'}")
-            logging.warning(f"[GitHub Upload]   - GITHUB_REPO: {GITHUB_REPO if GITHUB_REPO else 'NOT SET'}")
-            logging.warning(f"[GitHub Upload] Skipping upload")
+            _log(f"[GitHub Upload] ✗ GitHub credentials not configured:", "warning")
+            _log(f"[GitHub Upload]   - GITHUB_TOKEN: {'SET' if GITHUB_TOKEN else 'NOT SET'}", "warning")
+            _log(f"[GitHub Upload]   - GITHUB_USERNAME: {GITHUB_USERNAME if GITHUB_USERNAME else 'NOT SET'}", "warning")
+            _log(f"[GitHub Upload]   - GITHUB_REPO: {GITHUB_REPO if GITHUB_REPO else 'NOT SET'}", "warning")
+            _log(f"[GitHub Upload] Skipping upload", "warning")
             return False
         
-        logging.info(f"[GitHub Upload] ✓ GitHub credentials configured")
-        logging.info(f"[GitHub Upload] Target repo: {GITHUB_USERNAME}/{GITHUB_REPO}")
+        _log(f"[GitHub Upload] ✓ GitHub credentials configured")
+        _log(f"[GitHub Upload] Target repo: {GITHUB_USERNAME}/{GITHUB_REPO}")
         
         # Construct the API URL for the file in the repository
         url = f"{GITHUB_API_URL}/repos/{GITHUB_USERNAME}/{GITHUB_REPO}/contents/{repo_path}"
