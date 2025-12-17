@@ -140,8 +140,25 @@ async def start_services():
         await cleanup()
 
 async def cleanup():
-    await server.cleanup()
-    await StreamBot.stop()
+    try:
+        await server.cleanup()
+    except Exception as e:
+        logging.error(f"Error during server cleanup: {e}")
+    
+    try:
+        # Check if StreamBot is already stopped before attempting to stop
+        if StreamBot.is_connected:
+            await StreamBot.stop()
+            logging.info("Bot stopped successfully")
+        else:
+            logging.info("Bot already stopped, skipping stop")
+    except ConnectionError as e:
+        if "already terminated" in str(e).lower():
+            logging.info("Client already terminated, cleanup complete")
+        else:
+            logging.error(f"Connection error during bot cleanup: {e}")
+    except Exception as e:
+        logging.error(f"Error during bot cleanup: {e}")
 
 if __name__ == "__main__":
     try:
