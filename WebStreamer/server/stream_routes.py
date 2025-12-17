@@ -325,32 +325,9 @@ async def direct_download(request: web.Request):
         req_length = until_bytes - from_bytes + 1
         part_count = math.ceil(until_bytes / chunk_size) - math.floor(offset / chunk_size)
         
-        # Pre-validate file reference by attempting to get file info
-        # This catches FILE_REFERENCE_EXPIRED before streaming starts
-        try:
-            # Try to get the message to validate file reference is still valid
-            test_message = await faster_client.get_messages(file_id_obj.chat_id, file_id_obj.message_id)
-            if not test_message or not (test_message.video or test_message.audio or test_message.document):
-                error_page = get_error_page("File Not Found", "Link Expired")
-                return web.Response(text=error_page, content_type="text/html", status=410)
-        except Exception as validation_error:
-            error_str = str(validation_error)
-            logging.warning(f"File validation failed: {error_str}")
-            
-            # Handle specific validation errors
-            if "FILE_REFERENCE" in error_str and "EXPIRED" in error_str:
-                error_page = get_error_page("File Reference Expired", "Link Expired")
-                return web.Response(text=error_page, content_type="text/html", status=410)
-            elif "FILE_ID_INVALID" in error_str or "FILE_REFERENCE_INVALID" in error_str:
-                error_page = get_error_page("Invalid File Reference", "Link Expired")
-                return web.Response(text=error_page, content_type="text/html", status=410)
-            elif "CHANNEL_PRIVATE" in error_str:
-                error_page = get_error_page("Access Denied", "File Not Available")
-                return web.Response(text=error_page, content_type="text/html", status=403)
-            elif "MESSAGE_ID_INVALID" in error_str:
-                error_page = get_error_page("Message Not Found", "Link Expired")
-                return web.Response(text=error_page, content_type="text/html", status=410)
-            # If it's not a critical error, continue with streaming attempt
+        # Skip pre-validation - file info (fileId, name, size) is already in URL path
+        # Validation will happen during actual streaming, errors are handled in safe_yield_file
+        logging.debug(f"Starting stream for file: {file_name} (size: {file_size})")
         
         # Get the file generator
         file_generator = tg_connect.yield_file(
