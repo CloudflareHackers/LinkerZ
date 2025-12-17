@@ -99,23 +99,33 @@ async def start_services():
             log_flush(f"Error message: {session_error}", "error")
             log_flush("-" * 70, "error")
             
+            # Add explicit print statements for Heroku logging
+            print(f"[SESSION ERROR] Detected: {type(session_error).__name__}", flush=True)
+            print(f"[SESSION ERROR] Message: {session_error}", flush=True)
+            
             # Check if it's a session-related error
             if any(err in error_str_lower for err in ["no such table", "session", "auth", "database is locked", "database disk image is malformed"]):
                 log_flush("✓ Identified as session-related error, will re-authenticate", "warning")
+                print(f"[SESSION ERROR] Identified as session error, starting re-auth process", flush=True)
                 log_flush("")
                 log_flush("=" * 70)
                 log_flush("STEP 2B: RE-AUTHENTICATING WITH BOT TOKEN")
                 log_flush("=" * 70)
+                print(f"[REAUTH] STEP 2B: Starting re-authentication", flush=True)
                 
                 # Delete corrupted session file and any related files
+                print(f"[REAUTH] Deleting old session files", flush=True)
                 for file_to_delete in [session_file_path, session_file_path + "-journal", session_file_path + "-wal", session_file_path + "-shm"]:
                     if os.path.exists(file_to_delete):
                         log_flush(f"Deleting: {file_to_delete}")
+                        print(f"[REAUTH] Deleting: {file_to_delete}", flush=True)
                         try:
                             os.remove(file_to_delete)
                             log_flush(f"✓ Deleted: {file_to_delete}")
+                            print(f"[REAUTH] ✓ Deleted: {file_to_delete}", flush=True)
                         except Exception as delete_error:
                             log_flush(f"✗ Failed to delete {file_to_delete}: {delete_error}", "error")
+                            print(f"[REAUTH] ✗ Delete failed: {delete_error}", flush=True)
                 
                 # Retry with fresh session (bot_token will create new session)
                 log_flush("Starting fresh bot authentication with BOT_TOKEN...")
