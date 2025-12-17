@@ -92,40 +92,39 @@ async def start_services():
             error_str = str(session_error)
             error_str_lower = error_str.lower()
             
-            logging.error("=" * 70)
-            logging.error("SESSION ERROR DETECTED!")
-            logging.error("=" * 70)
-            logging.error(f"Error type: {type(session_error).__name__}")
-            logging.error(f"Error message: {session_error}")
-            logging.error("-" * 70)
+            log_flush("=" * 70, "error")
+            log_flush("SESSION ERROR DETECTED!", "error")
+            log_flush("=" * 70, "error")
+            log_flush(f"Error type: {type(session_error).__name__}", "error")
+            log_flush(f"Error message: {session_error}", "error")
+            log_flush("-" * 70, "error")
             
             # Check if it's a session-related error
             if any(err in error_str_lower for err in ["no such table", "session", "auth", "database is locked", "database disk image is malformed"]):
-                logging.warning(f"✓ Identified as session-related error, will re-authenticate")
-                logging.info("")
-                logging.info("=" * 70)
-                logging.info("STEP 2B: RE-AUTHENTICATING WITH BOT TOKEN")
-                logging.info("=" * 70)
+                log_flush("✓ Identified as session-related error, will re-authenticate", "warning")
+                log_flush("")
+                log_flush("=" * 70)
+                log_flush("STEP 2B: RE-AUTHENTICATING WITH BOT TOKEN")
+                log_flush("=" * 70)
                 
-                # Delete corrupted session file
-                if os.path.exists(session_file_path):
-                    logging.info(f"Deleting corrupted session file: {session_file_path}")
-                    try:
-                        os.remove(session_file_path)
-                        logging.info(f"✓ Deleted corrupted session file successfully")
-                    except Exception as delete_error:
-                        logging.error(f"✗ Failed to delete session file: {delete_error}")
-                else:
-                    logging.info(f"! Session file doesn't exist, no need to delete")
+                # Delete corrupted session file and any related files
+                for file_to_delete in [session_file_path, session_file_path + "-journal", session_file_path + "-wal", session_file_path + "-shm"]:
+                    if os.path.exists(file_to_delete):
+                        log_flush(f"Deleting: {file_to_delete}")
+                        try:
+                            os.remove(file_to_delete)
+                            log_flush(f"✓ Deleted: {file_to_delete}")
+                        except Exception as delete_error:
+                            log_flush(f"✗ Failed to delete {file_to_delete}: {delete_error}", "error")
                 
                 # Retry with fresh session (bot_token will create new session)
-                logging.info("Starting fresh bot authentication with BOT_TOKEN...")
+                log_flush("Starting fresh bot authentication with BOT_TOKEN...")
                 try:
                     await StreamBot.start()
-                    logging.info("✓ Bot.start() completed")
+                    log_flush("✓ Bot.start() completed")
                     
                     bot_info = await StreamBot.get_me()
-                    logging.info("✓ Bot.get_me() completed")
+                    log_flush("✓ Bot.get_me() completed")
                     
                     StreamBot.username = bot_info.username
                     
@@ -135,32 +134,48 @@ async def start_services():
                     cached_bot_info["id"] = bot_info.id
                     
                     session_retry = True
-                    logging.info("")
-                    logging.info("✓✓✓ RE-AUTHENTICATION SUCCESSFUL ✓✓✓")
-                    logging.info(f"✓ Bot name: {bot_info.first_name}")
-                    logging.info(f"✓ Bot username: @{bot_info.username}")
-                    logging.info(f"✓ Bot ID: {bot_info.id}")
+                    log_flush("")
+                    log_flush("✓✓✓ RE-AUTHENTICATION SUCCESSFUL ✓✓✓")
+                    log_flush(f"✓ Bot name: {bot_info.first_name}")
+                    log_flush(f"✓ Bot username: @{bot_info.username}")
+                    log_flush(f"✓ Bot ID: {bot_info.id}")
                     
                     # Verify new session file was created
                     if os.path.exists(session_file_path):
                         file_size = os.path.getsize(session_file_path)
-                        logging.info(f"✓ New session file created: {session_file_path} ({file_size} bytes)")
+                        log_flush(f"✓ New session file created: {session_file_path} ({file_size} bytes)")
+                        
+                        # IMMEDIATE UPLOAD after re-authentication to ensure it happens
+                        log_flush(">>> IMMEDIATE SESSION UPLOAD AFTER RE-AUTH <<<")
+                        try:
+                            immediate_upload = await upload_to_github(session_file_path, session_file)
+                            if immediate_upload:
+                                log_flush("✓✓✓ IMMEDIATE UPLOAD SUCCESSFUL ✓✓✓")
+                            else:
+                                log_flush("✗ Immediate upload returned False", "warning")
+                        except Exception as imm_err:
+                            log_flush(f"✗ Immediate upload exception: {imm_err}", "error")
                     else:
-                        logging.error(f"✗ Session file was NOT created at: {session_file_path}")
+                        log_flush(f"✗ Session file was NOT created at: {session_file_path}", "error")
+                        # List directory contents for debugging
+                        log_flush(f"Directory contents of {os.getcwd()}:")
+                        for f in os.listdir(os.getcwd()):
+                            if 'session' in f.lower():
+                                log_flush(f"  - {f}")
                     
-                    logging.info("-" * 70)
-                    logging.info("")
+                    log_flush("-" * 70)
+                    log_flush("")
                 except Exception as retry_error:
-                    logging.error("=" * 70)
-                    logging.error("RE-AUTHENTICATION FAILED!")
-                    logging.error("=" * 70)
-                    logging.error(f"Error type: {type(retry_error).__name__}")
-                    logging.error(f"Error message: {retry_error}")
-                    logging.error("-" * 70)
+                    log_flush("=" * 70, "error")
+                    log_flush("RE-AUTHENTICATION FAILED!", "error")
+                    log_flush("=" * 70, "error")
+                    log_flush(f"Error type: {type(retry_error).__name__}", "error")
+                    log_flush(f"Error message: {retry_error}", "error")
+                    log_flush("-" * 70, "error")
                     raise
             else:
                 # Not a session error, re-raise
-                logging.error(f"✗ NOT a session error, re-raising exception")
+                log_flush(f"✗ NOT a session error, re-raising exception", "error")
                 raise
 
         # Upload session file to GitHub after starting the bot
