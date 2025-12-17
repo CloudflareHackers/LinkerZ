@@ -157,16 +157,31 @@ async def download_from_github(repo_path: str, local_path: Optional[str] = None)
         logging.info(f"[GitHub Download] Target repo: {GITHUB_USERNAME}/{GITHUB_REPO}")
         
         url = f"{GITHUB_API_URL}/repos/{GITHUB_USERNAME}/{GITHUB_REPO}/contents/{repo_path}"
+        logging.info(f"[GitHub Download] API URL: {url}")
+        
         headers = {
             "Authorization": f"token {GITHUB_TOKEN}",
             "Accept": "application/vnd.github.v3+json"
         }
         
         async with aiohttp.ClientSession() as session:
+            logging.info(f"[GitHub Download] Sending GET request to GitHub...")
             async with session.get(url, headers=headers) as response:
+                logging.info(f"[GitHub Download] Response status: {response.status}")
+                
                 if response.status == 200:
+                    logging.info(f"[GitHub Download] ✓ File found on GitHub")
                     data = await response.json()
+                    
+                    # Check if content exists
+                    if "content" not in data:
+                        logging.error(f"[GitHub Download] ✗ No content in response")
+                        return False
+                    
+                    logging.info(f"[GitHub Download] Decoding base64 content...")
                     content = base64.b64decode(data["content"])
+                    content_size = len(content)
+                    logging.info(f"[GitHub Download] Decoded content size: {content_size} bytes")
                     
                     # Determine file path
                     if local_path:
@@ -175,20 +190,38 @@ async def download_from_github(repo_path: str, local_path: Optional[str] = None)
                         file_name = os.path.basename(repo_path)
                         file_path = os.path.join(os.getcwd(), file_name)
                     
+                    logging.info(f"[GitHub Download] Writing to file: {file_path}")
+                    
                     # Write content to file
                     with open(file_path, "wb") as file:
                         file.write(content)
                     
-                    logging.info(f"Downloaded {repo_path} from GitHub to {file_path}")
-                    return True
+                    # Verify file was written
+                    if os.path.exists(file_path):
+                        written_size = os.path.getsize(file_path)
+                        logging.info(f"[GitHub Download] ✓✓✓ SUCCESS! File saved: {file_path}")
+                        logging.info(f"[GitHub Download] File size: {written_size} bytes")
+                        return True
+                    else:
+                        logging.error(f"[GitHub Download] ✗ File was not written to disk")
+                        return False
                 
                 elif response.status == 404:
-                    logging.info(f"{repo_path} not found in GitHub, proceeding without session file")
+                    logging.info(f"[GitHub Download] ! File not found on GitHub: {repo_path}")
+                    logging.info(f"[GitHub Download] This is normal for first-time setup")
                     return False
                 else:
-                    logging.error(f"Failed to download {repo_path}. Status code: {response.status}")
+                    logging.error(f"[GitHub Download] ✗ Failed to download from GitHub")
+                    logging.error(f"[GitHub Download] Status code: {response.status}")
+                    try:
+                        error_body = await response.text()
+                        logging.error(f"[GitHub Download] Response: {error_body[:500]}")
+                    except:
+                        pass
                     return False
     
     except Exception as e:
-        logging.error(f"Failed to download {repo_path} from GitHub: {e}")
+        logging.error(f"[GitHub Download] ✗✗✗ EXCEPTION during download: {e}")
+        import traceback
+        logging.error(f"[GitHub Download] Traceback: {traceback.format_exc()}")
         return False
