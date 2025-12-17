@@ -179,37 +179,53 @@ async def start_services():
                 raise
 
         # Upload session file to GitHub after starting the bot
-        logging.info("=" * 70)
-        logging.info("STEP 3: UPLOADING SESSION FILE TO GITHUB")
-        logging.info("=" * 70)
+        log_flush("=" * 70)
+        log_flush("STEP 3: UPLOADING SESSION FILE TO GITHUB")
+        log_flush("=" * 70)
         
         if session_retry:
-            logging.info("! This is a NEW session (re-authenticated), uploading to GitHub...")
+            log_flush("! This is a NEW session (re-authenticated), uploading to GitHub...")
         else:
-            logging.info("! This is an EXISTING session, updating GitHub backup...")
+            log_flush("! This is an EXISTING session, updating GitHub backup...")
         
-        logging.info(f"Session file to upload: {session_file}")
-        logging.info(f"Session file path: {session_file_path}")
-        logging.info(f"Session file exists: {os.path.exists(session_file_path)}")
+        log_flush(f"Session file to upload: {session_file}")
+        log_flush(f"Session file path: {session_file_path}")
+        log_flush(f"Session file exists: {os.path.exists(session_file_path)}")
         
         if os.path.exists(session_file_path):
             file_size = os.path.getsize(session_file_path)
-            logging.info(f"Session file size: {file_size} bytes")
-        
-        logging.info("Starting GitHub upload...")
-        upload_success = await upload_to_github(session_file, session_file)
-        
-        if upload_success:
-            logging.info("✓✓✓ SESSION FILE UPLOADED TO GITHUB SUCCESSFULLY ✓✓✓")
-            if session_retry:
-                logging.info("✓ NEW session is now backed up to GitHub")
+            log_flush(f"Session file size: {file_size} bytes")
+            
+            # Upload with retry logic (use full path for reliability)
+            upload_success = False
+            max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                log_flush(f"GitHub upload attempt {attempt}/{max_retries}...")
+                try:
+                    upload_success = await upload_to_github(session_file_path, session_file)
+                    if upload_success:
+                        log_flush(f"✓✓✓ SESSION FILE UPLOADED TO GITHUB SUCCESSFULLY (attempt {attempt}) ✓✓✓")
+                        if session_retry:
+                            log_flush("✓ NEW session is now backed up to GitHub")
+                        break
+                    else:
+                        log_flush(f"✗ Upload attempt {attempt} returned False", "warning")
+                except Exception as upload_err:
+                    log_flush(f"✗ Upload attempt {attempt} failed: {upload_err}", "error")
+                
+                if attempt < max_retries:
+                    log_flush(f"Waiting 2 seconds before retry...")
+                    await asyncio.sleep(2)
+            
+            if not upload_success:
+                log_flush("✗✗✗ GITHUB UPLOAD FAILED AFTER ALL RETRIES ✗✗✗", "error")
+                if session_retry:
+                    log_flush("✗ NEW session was NOT backed up - manual backup recommended!", "warning")
         else:
-            logging.error("✗✗✗ GITHUB UPLOAD FAILED ✗✗✗")
-            if session_retry:
-                logging.warning("✗ NEW session was NOT backed up - manual backup recommended!")
+            log_flush(f"✗ Session file not found at {session_file_path}, cannot upload", "error")
         
-        logging.info("-" * 70)
-        logging.info("")
+        log_flush("-" * 70)
+        log_flush("")
 
         logging.info("---------------------- Initializing Clients ----------------------")
         await initialize_clients()
