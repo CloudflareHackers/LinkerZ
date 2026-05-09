@@ -459,10 +459,11 @@ class ByteStreamer:
                             location=location, offset=offset, limit=chunk_size
                         ),
                     )
-        except (TimeoutError, AttributeError):
-            pass
+        except (TimeoutError, AttributeError) as e:
+            logging.warning(f"Stream interrupted after {current_part} parts: {e}")
+            raise
         finally:
-            logging.debug("Finished yielding file with {current_part} parts.")
+            logging.debug(f"Finished yielding file with {current_part} parts.")
             work_loads[index] -= 1
 
     

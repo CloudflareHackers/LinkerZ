@@ -331,14 +331,21 @@ async def direct_download(request: web.Request):
                 setattr(file_id_obj, "file_size", file_size)
         
         # Handle range requests
-        range_header = request.headers.get("Range", 0)
+        range_header = request.headers.get("Range")
         if range_header:
-            from_bytes, until_bytes = range_header.replace("bytes=", "").split("-")
-            from_bytes = int(from_bytes)
-            until_bytes = int(until_bytes) if until_bytes else file_size - 1
+            try:
+                parts = range_header.replace("bytes=", "").split("-", 1)
+                from_bytes = int(parts[0]) if parts[0] else 0
+                until_bytes = int(parts[1]) if len(parts) > 1 and parts[1] else file_size - 1
+            except (ValueError, IndexError):
+                error_page = get_error_page("Range Not Satisfiable", "Invalid Request Range")
+                return web.Response(
+                    text=error_page, content_type="text/html", status=416,
+                    headers={"Content-Range": f"bytes */{file_size}"},
+                )
         else:
-            from_bytes = request.http_range.start or 0
-            until_bytes = (request.http_range.stop or file_size) - 1
+            from_bytes = 0
+            until_bytes = file_size - 1
         
         if (until_bytes > file_size) or (from_bytes < 0) or (until_bytes < from_bytes):
             error_page = get_error_page("Range Not Satisfiable", "Invalid Request Range")
@@ -357,7 +364,7 @@ async def direct_download(request: web.Request):
         last_part_cut = until_bytes % chunk_size + 1
         
         req_length = until_bytes - from_bytes + 1
-        part_count = math.ceil(until_bytes / chunk_size) - math.floor(offset / chunk_size)
+        part_count = math.ceil((until_bytes + 1) / chunk_size) - math.floor(offset / chunk_size)
         
         # Skip pre-validation - file info (fileId, name, size) is already in URL path
         # Validation will happen during actual streaming, errors are handled in safe_yield_file
@@ -419,7 +426,7 @@ async def direct_download(request: web.Request):
                 elif "MessageIdInvalid" in error_class or "MESSAGE_ID_INVALID" in error_str:
                     error_page = get_error_page("Message Not Found", "Link Expired")
                     return web.Response(text=error_page, content_type="text/html", status=410)
-        except:
+        except Exception:
             pass
         
         # Generic error page for other exceptions

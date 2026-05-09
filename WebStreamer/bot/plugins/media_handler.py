@@ -59,11 +59,22 @@ async def scheduled_cleanup():
             logging.error(f"Error in scheduled cleanup: {e}")
 
 
+def _on_cleanup_task_done(task):
+    """Restart cleanup task if it exits unexpectedly."""
+    global _cleanup_task_started
+    _cleanup_task_started = False
+    if not task.cancelled():
+        exc = task.exception()
+        if exc:
+            logging.error(f"Cleanup task died: {exc} — restarting")
+    start_cleanup_task()
+
 def start_cleanup_task():
     """Start the cleanup background task if not already running"""
     global _cleanup_task_started
     if not _cleanup_task_started:
-        asyncio.create_task(scheduled_cleanup())
+        task = asyncio.create_task(scheduled_cleanup())
+        task.add_done_callback(_on_cleanup_task_done)
         _cleanup_task_started = True
         logging.info("Started scheduled cleanup task for processed messages")
 
