@@ -15,6 +15,8 @@ from pyrogram.file_id import FileId, FileType, ThumbnailSource
 # Locks to prevent concurrent auth exports per DC (prevents FloodWait)
 _dc_session_locks: Dict[int, asyncio.Lock] = {}
 
+MAX_CACHE_SIZE = 500  # max cached file IDs per ByteStreamer instance
+
 def get_dc_lock(dc_id: int) -> asyncio.Lock:
     """Get or create a lock for a specific DC to prevent concurrent auth exports"""
     if dc_id not in _dc_session_locks:
@@ -252,7 +254,7 @@ class ByteStreamer:
         This is a modified version of the <https://github.com/eyaadh/megadlbot_oss/blob/master/mega/telegram/utils/custom_download.py>
         Thanks to Eyaadh <https://github.com/eyaadh>
         """
-        self.clean_timer = 30 * 60
+        self.clean_timer = 5 * 60  # clear every 5 min instead of 30
         self.client: Client = client
         self.cached_file_ids: Dict[int, FileId] = {}
         asyncio.create_task(self.clean_cache())
@@ -279,6 +281,11 @@ class ByteStreamer:
         if not file_id:
             logging.debug(f"Message with ID {message_id} not found")
             raise FileNotFound
+        # Evict oldest quarter when cache is full
+        if len(self.cached_file_ids) >= MAX_CACHE_SIZE:
+            evict = list(self.cached_file_ids.keys())[:MAX_CACHE_SIZE // 4]
+            for k in evict:
+                del self.cached_file_ids[k]
         self.cached_file_ids[message_id] = file_id
         logging.debug(f"Cached media message with ID {message_id}")
         return self.cached_file_ids[message_id]
@@ -422,13 +429,11 @@ class ByteStreamer:
         """
         client = self.client
         work_loads[index] += 1
-        logging.debug(f"Starting to yielding file with client {index}.")
-        media_session = await self.generate_media_session(client, file_id)
-
         current_part = 1
-        location = await self.get_location(file_id)
-
         try:
+            logging.debug(f"Starting to yielding file with client {index}.")
+            media_session = await self.generate_media_session(client, file_id)
+            location = await self.get_location(file_id)
             r = await media_session.invoke(
                 raw.functions.upload.GetFile(
                     location=location, offset=offset, limit=chunk_size

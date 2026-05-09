@@ -95,29 +95,15 @@ async def is_message_processed(chat_id: int, message_id: int, bot_id: int) -> bo
     """Check if message was already processed by any bot"""
     async with _processed_lock:
         current_time = time.time()
-        
-        # Cleanup old entries
-        expired_keys = [
-            k for k, ts in _processed_messages.items()
-            if current_time - ts > PROCESSED_TTL
-        ]
-        for k in expired_keys:
-            del _processed_messages[k]
-        
-        # Check if this specific message was processed by THIS bot
         key = (chat_id, message_id, bot_id)
         if key in _processed_messages:
             return True
-        
-        # Check if any bot has processed this message recently (within lock TTL)
-        # This prevents duplicate processing by multiple bots
-        for (c_id, m_id, b_id), ts in _processed_messages.items():
+        # Check if any other bot processed this message within the lock TTL
+        for (c_id, m_id, _b_id), ts in _processed_messages.items():
             if c_id == chat_id and m_id == message_id:
-                # Another bot processed it recently
                 if current_time - ts < PROCESS_LOCK_TTL:
-                    logging.debug(f"Message {message_id} in {chat_id} already being processed by bot {b_id}")
+                    logging.debug(f"Message {message_id} in {chat_id} already being processed by bot {_b_id}")
                     return True
-        
         return False
 
 async def mark_message_processed(chat_id: int, message_id: int, bot_id: int):

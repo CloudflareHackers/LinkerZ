@@ -3,6 +3,7 @@ import re
 import time
 import math
 import hmac
+import asyncio
 import hashlib
 import logging
 import secrets
@@ -19,6 +20,8 @@ import urllib.parse
 
 THREADPOOL = ThreadPoolExecutor(max_workers=1000)
 LINK_TTL = 3600  # seconds
+MAX_CONCURRENT_STREAMS = 100
+_stream_semaphore = asyncio.Semaphore(MAX_CONCURRENT_STREAMS)
 
 
 def make_link_sig(unique_file_id: str, timestamp: int) -> str:
@@ -227,16 +230,21 @@ async def safe_yield_file(generator):
     except Exception as e:
         error_str = str(e)
         logging.error(f"Error during file streaming: {error_str}", exc_info=True)
-        
-        # Log the specific error type for monitoring
         if "FILE_REFERENCE" in error_str and "EXPIRED" in error_str:
             logging.error("FILE_REFERENCE_EXPIRED during streaming - connection already established")
         elif "FLOOD_WAIT" in error_str:
             logging.error("FLOOD_WAIT during streaming - rate limited")
-        
-        # Can't send error page here as headers already sent
-        # Connection will be closed and client will see incomplete download
         raise
+
+
+async def _semaphored_stream(body):
+    """Hold the stream semaphore for the full lifetime of the response body."""
+    await _stream_semaphore.acquire()
+    try:
+        async for chunk in body:
+            yield chunk
+    finally:
+        _stream_semaphore.release()
 
 @routes.get("/dl/{unique_file_id}/{file_id}/{size}/{filename}", allow_head=True)
 async def direct_download(request: web.Request):
@@ -370,13 +378,17 @@ async def direct_download(request: web.Request):
         # Validation will happen during actual streaming, errors are handled in safe_yield_file
         logging.debug(f"Starting stream for file: {file_name} (size: {file_size})")
         
+        # Reject early if already at capacity
+        if _stream_semaphore.locked():
+            error_page = get_error_page("Server Busy", "Too Many Concurrent Downloads",
+                                        extra_detail="Please try again in a moment.")
+            return web.Response(text=error_page, content_type="text/html", status=503)
+
         # Get the file generator
         file_generator = tg_connect.yield_file(
             file_id_obj, index, offset, first_part_cut, last_part_cut, part_count, chunk_size
         )
-        
-        # Wrap it with error handling
-        body = safe_yield_file(file_generator)
+        body = _semaphored_stream(safe_yield_file(file_generator))
         
         disposition = "attachment"
         

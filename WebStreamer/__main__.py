@@ -5,12 +5,13 @@ import sys
 import logging
 import asyncio
 import os
+from logging.handlers import RotatingFileHandler
 from .vars import Var
 from aiohttp import web
 from pyrogram import idle
 from WebStreamer import bot_loop, utils
 from WebStreamer import StreamBot
-from WebStreamer.server import web_server
+from WebStreamer.server import make_runner
 from WebStreamer.bot.clients import initialize_clients
 from WebStreamer.bot import cached_bot_info
 from WebStreamer.utils import upload_to_github, download_from_github
@@ -20,15 +21,17 @@ logging.basicConfig(
     level=logging.INFO,
     datefmt="%d/%m/%Y %H:%M:%S",
     format="[%(asctime)s][%(levelname)s] => %(message)s",
-    handlers=[logging.StreamHandler(stream=sys.stdout),
-              logging.FileHandler("streambot.log", mode="a", encoding="utf-8")],)
+    handlers=[
+        logging.StreamHandler(stream=sys.stdout),
+        RotatingFileHandler("streambot.log", maxBytes=10*1024*1024, backupCount=2, encoding="utf-8"),
+    ])
 
 logging.getLogger("aiohttp").setLevel(logging.ERROR)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
 #logging.getLogger("pyrogram").setLevel(logging.DEBUG)
 #logging.getLogger("aiohttp.web").setLevel(logging.ERROR)
 
-server = web.AppRunner(web_server())
+server = make_runner()
 
 # Session file named based on BOT_ID from env (e.g., "123456789.session")
 session_file = f"{bot_session_name}.session"

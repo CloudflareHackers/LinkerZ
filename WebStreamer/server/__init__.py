@@ -68,3 +68,7 @@ def web_server():
     web_app = web.Application(client_max_size=30000000, middlewares=[error_middleware])
     web_app.add_routes(stream_routes)
     return web_app
+
+
+def make_runner():
+    return web.AppRunner(web_server(), keepalive_timeout=65)
