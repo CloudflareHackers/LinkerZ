@@ -2,6 +2,8 @@
 import re
 import time
 import math
+import hmac
+import hashlib
 import logging
 import secrets
 import mimetypes
@@ -16,6 +18,14 @@ from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 
 THREADPOOL = ThreadPoolExecutor(max_workers=1000)
+LINK_TTL = 3600  # seconds
+
+
+def make_link_sig(unique_file_id: str, timestamp: int) -> str:
+    """HMAC-SHA256 over '{unique_file_id}:{timestamp}' — truncated to 16 hex chars."""
+    from WebStreamer.vars import Var
+    msg = f"{unique_file_id}:{timestamp}".encode()
+    return hmac.new(Var.DOWNLOAD_SECRET_KEY.encode(), msg, hashlib.sha256).hexdigest()[:16]
 
 
 def sanitize_header_value(value: str) -> str:
@@ -140,10 +150,11 @@ async def link_route_handler(request: web.Request):
         file_size = file_id.file_size
         mime_type = file_id.mime_type
         
-        # Build permanent download URL with new format
         fqdn = Var.FQDN
         safe_filename = urllib.parse.quote(file_name or 'file', safe='')
-        download_url = f"https://{fqdn}/dl/{unique_file_id}/{telegram_file_id}/{file_size}/{safe_filename}"
+        link_ts = int(time.time())
+        sig = make_link_sig(unique_file_id, link_ts)
+        download_url = f"https://{fqdn}/dl/{unique_file_id}/{telegram_file_id}/{file_size}/{safe_filename}?t={link_ts}&s={sig}"
         
         return web.json_response({
             'success': True,
@@ -172,8 +183,9 @@ async def link_route_handler(request: web.Request):
             'message': error_message
         }, status=500)
 
-def get_error_page(error_title, error_message):
+def get_error_page(error_title, error_message, extra_detail=None):
     """Generate styled error page matching the home page design"""
+    extra_html = f'<div class="extra-detail">{extra_detail}</div>' if extra_detail else ''
     html_content = f'''<html>
 <head>
     <title>{error_title} - LinkerX CDN</title>
@@ -183,7 +195,8 @@ def get_error_page(error_title, error_message):
         .content{{ text-align:center; display:inline-block }}
         .message{{ font-size:80px; margin-bottom:40px }}
         .submessage{{ font-size:40px; margin-bottom:40px; color:#e74c3c }}
-        .error-detail{{ font-size:20px; margin-bottom:30px; color:#95a5a6 }}
+        .error-detail{{ font-size:20px; margin-bottom:15px; color:#95a5a6 }}
+        .extra-detail{{ font-size:16px; margin-bottom:30px; color:#7f8c8d }}
         .copyright{{ font-size:20px; }}
         a{{ text-decoration:none; color:#3498db }}
     </style>
@@ -194,6 +207,7 @@ def get_error_page(error_title, error_message):
             <div class="message">LinkerX CDN</div>
             <div class="submessage">{error_message}</div>
             <div class="error-detail">{error_title}</div>
+            {extra_html}
             <div class="copyright">Hash Hackers and LiquidX Projects</div>
         </div>
     </div>
@@ -236,7 +250,27 @@ async def direct_download(request: web.Request):
         # Decode filename from URL encoding
         file_name = urllib.parse.unquote(filename_encoded)
         file_size = int(size_str) if size_str.isdigit() else 0
-        
+
+        # Enforce 1-hour expiry with HMAC signature to prevent timestamp tampering.
+        _expired_page = get_error_page(
+            "Link Expired",
+            "This link has expired",
+            extra_detail="Download links are valid for 1 hour. Please request a new link."
+        )
+        t_param = request.rel_url.query.get('t')
+        s_param = request.rel_url.query.get('s')
+        if not t_param or not s_param:
+            return web.Response(text=_expired_page, content_type="text/html", status=410)
+        try:
+            link_time = int(t_param)
+            if time.time() - link_time > LINK_TTL:
+                return web.Response(text=_expired_page, content_type="text/html", status=410)
+            expected_sig = make_link_sig(unique_file_id, link_time)
+            if not hmac.compare_digest(s_param, expected_sig):
+                return web.Response(text=_expired_page, content_type="text/html", status=410)
+        except (ValueError, TypeError):
+            return web.Response(text=_expired_page, content_type="text/html", status=410)
+
         logging.debug(f"Download request: {unique_file_id} - {file_name}")
         
         # Get a client to stream with

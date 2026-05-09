@@ -1,4 +1,6 @@
 # Simplified media handler - single "DL Link" button - No R2, local tracking only
+import hmac
+import hashlib
 import logging
 import time
 import asyncio
@@ -194,7 +196,13 @@ async def store_and_reply_to_media(client, message: Message):
         
         # URL encode the filename for safe URL usage
         safe_filename = urllib.parse.quote(file_name, safe='')
-        download_url = f"https://{fqdn}/dl/{unique_file_id}/{file_id}/{file_size}/{safe_filename}"
+        link_ts = int(time.time())
+        sig = hmac.new(
+            Var.DOWNLOAD_SECRET_KEY.encode(),
+            f"{unique_file_id}:{link_ts}".encode(),
+            hashlib.sha256
+        ).hexdigest()[:16]
+        download_url = f"https://{fqdn}/dl/{unique_file_id}/{file_id}/{file_size}/{safe_filename}?t={link_ts}&s={sig}"
         
         # Check if message already has buttons (from other bot instances)
         existing_buttons = []
